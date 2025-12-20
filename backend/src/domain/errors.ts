@@ -67,3 +67,17 @@ export class AuthorizationError extends DomainError {
     this.name = 'AuthorizationError';
   }
 }
+
+export class OwnershipError extends DomainError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'OwnershipError';
+  }
+}
+
+export class MembershipError extends DomainError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'MembershipError';
+  }
+}

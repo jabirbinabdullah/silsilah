@@ -75,3 +75,14 @@ export interface TreeOwnership {
   ownerId: string;
   editors: string[];
 }
+
+export interface Member {
+  userId: string;
+  role: UserRole;
+}
+
+export interface FamilyTreeSnapshot {
+  treeId: string;
+  ownerId: string;
+  members: Member[];
+}
