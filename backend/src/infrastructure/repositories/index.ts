@@ -1,0 +1,1 @@
+export type { GenealogyGraphRepository } from './genealogy-graph.repository';
