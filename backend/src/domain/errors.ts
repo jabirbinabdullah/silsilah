@@ -60,3 +60,10 @@ export class PersonHasRelationshipsError extends InvariantViolationError {
     this.name = 'PersonHasRelationshipsError';
   }
 }
+
+export class AuthorizationError extends DomainError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AuthorizationError';
+  }
+}
