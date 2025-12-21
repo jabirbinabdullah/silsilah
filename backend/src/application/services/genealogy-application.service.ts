@@ -29,6 +29,7 @@ export class GenealogyApplicationService {
   private readonly getDescendants: GetDescendantsHandler;
   private readonly renderTree: RenderGenealogyTreeHandler;
   private readonly repository: GenealogyGraphRepository;
+  private readonly readRepository: GenealogyGraphRepository;
   private readonly auditLogRepository?: AuditLogRepository;
   private userContext?: UserContext;
   private readonly requiresAuth: boolean;
@@ -38,8 +39,10 @@ export class GenealogyApplicationService {
     factory: GenealogyGraphFactory,
     requiresAuth: boolean = false,
     auditLogRepository?: AuditLogRepository,
+    readRepository?: GenealogyGraphRepository,
   ) {
     this.repository = repository;
+    this.readRepository = readRepository ?? repository;
     this.auditLogRepository = auditLogRepository;
     this.createFamilyTree = new CreateFamilyTreeHandler(repository, factory);
     this.createPerson = new CreatePersonHandler(repository);
@@ -47,10 +50,10 @@ export class GenealogyApplicationService {
     this.establishSpouse = new EstablishSpouseHandler(repository);
     this.removeRelationship = new RemoveRelationshipHandler(repository);
     this.removePerson = new RemovePersonHandler(repository);
-    this.getPerson = new GetPersonHandler(repository);
-    this.getAncestors = new GetAncestorsHandler(repository);
-    this.getDescendants = new GetDescendantsHandler(repository);
-    this.renderTree = new RenderGenealogyTreeHandler(repository);
+    this.getPerson = new GetPersonHandler(this.readRepository);
+    this.getAncestors = new GetAncestorsHandler(this.readRepository);
+    this.getDescendants = new GetDescendantsHandler(this.readRepository);
+    this.renderTree = new RenderGenealogyTreeHandler(this.readRepository);
     this.requiresAuth = requiresAuth;
   }
 
@@ -204,7 +207,7 @@ export class GenealogyApplicationService {
 
   async exportTreeSnapshot(treeId: string) {
     this.requireOwnerStrict();
-    const snapshot = await (this.repository as any).getSnapshot(treeId);
+    const snapshot = await (this.readRepository as any).getSnapshot(treeId);
     if (!snapshot) {
       throw new NotFoundError(`Tree ${treeId} not found`);
     }
