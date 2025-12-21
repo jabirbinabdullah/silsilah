@@ -15,3 +15,5 @@ Structure:
 
 Notes:
 - Business rules stay in domain. Application ensures data shaping (e.g., spouse ordering) and orchestration only.
+
+#__# 
