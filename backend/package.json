@@ -9,7 +9,8 @@
     "build": "nest build",
     "test:smoke": "ts-node smoke-test.ts",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "seed:user": "ts-node scripts/seed-user.ts"
+    "seed:user": "ts-node scripts/seed-user.ts",
+    "prepare": "husky"
   },
   "dependencies": {
     "@nestjs/common": "^10.0.0",
@@ -23,6 +24,8 @@
     "rxjs": "^7.8.0"
   },
   "devDependencies": {
+    "@commitlint/cli": "^20.2.0",
+    "@commitlint/config-conventional": "^20.2.0",
     "@nestjs/cli": "^10.0.0",
     "@nestjs/schematics": "^10.0.0",
     "@nestjs/testing": "^10.0.0",
@@ -31,6 +34,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.0.0",
     "@types/supertest": "^6.0.3",
+    "husky": "^9.1.7",
     "jest": "^30.2.0",
     "supertest": "^7.1.4",
     "ts-jest": "^29.4.6",
