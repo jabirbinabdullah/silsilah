@@ -3,6 +3,7 @@ import {
   AuthorizationError,
   OwnershipError,
   MembershipError,
+  NotFoundError,
 } from '../../domain/errors';
 import type { AuditLogRepository, GenealogyGraphRepository } from '../../infrastructure/repositories';
 import { CreateFamilyTreeHandler, type CreateFamilyTreeCommand } from '../commands/create-family-tree.command';
@@ -59,6 +60,15 @@ export class GenealogyApplicationService {
    */
   setUserContext(context: UserContext): void {
     this.userContext = context;
+  }
+
+  private requireOwnerStrict(): void {
+    if (!this.userContext) {
+      throw new AuthorizationError('User context required for owner operations');
+    }
+    if (this.userContext.role !== 'OWNER') {
+      throw new AuthorizationError('Only owners can perform this operation');
+    }
   }
 
   private async appendAudit(action: string, treeId: string): Promise<void> {
@@ -190,6 +200,130 @@ export class GenealogyApplicationService {
   async handleRenderTree(query: RenderGenealogyTreeQuery) {
     this.requireQuery();
     return this.renderTree.execute(query);
+  }
+
+  async exportTreeSnapshot(treeId: string) {
+    this.requireOwnerStrict();
+    const snapshot = await (this.repository as any).getSnapshot(treeId);
+    if (!snapshot) {
+      throw new NotFoundError(`Tree ${treeId} not found`);
+    }
+
+    return {
+      treeId: snapshot.treeId,
+      persons: snapshot.persons,
+      parentChildEdges: snapshot.parentChildEdges,
+      spouseEdges: snapshot.spouseEdges,
+      ownerId: snapshot.ownerId,
+      members: snapshot.members,
+      version: snapshot.version,
+      createdAt: snapshot.createdAt,
+      updatedAt: snapshot.updatedAt,
+      exportedAt: new Date(),
+    };
+  }
+
+  async exportTreeGedcom(treeId: string): Promise<string> {
+    const snapshot = await this.exportTreeSnapshot(treeId);
+    return this.toGedcom(snapshot.treeId, snapshot.persons, snapshot.parentChildEdges, snapshot.spouseEdges);
+  }
+
+  private toGedcom(
+    treeId: string,
+    persons: Array<{ personId: string; name: string; gender: 'MALE' | 'FEMALE' | 'UNKNOWN'; birthDate?: Date | null; birthPlace?: string | null; deathDate?: Date | null }>,
+    parentChildEdges: Array<{ parentId: string; childId: string }>,
+    spouseEdges: Array<{ spouse1Id: string; spouse2Id: string }>,
+  ): string {
+    const lines: string[] = [];
+    lines.push('0 HEAD');
+    lines.push('1 SOUR silsilah');
+    lines.push('1 GEDC');
+    lines.push('2 VERS 5.5.1');
+    lines.push('1 CHAR UTF-8');
+
+    const formatDate = (value: unknown): string | null => {
+      if (!value) return null;
+      const date = typeof value === 'string' ? new Date(value) : (value as Date);
+      if (Number.isNaN(date.getTime())) return null;
+      return date.toISOString().split('T')[0];
+    };
+
+    // Individuals
+    const personMap = new Map(persons.map((p) => [p.personId, p]));
+    for (const p of persons) {
+      lines.push(`0 @${p.personId}@ INDI`);
+      lines.push(`1 NAME ${p.name}`);
+      lines.push(`1 SEX ${p.gender === 'MALE' ? 'M' : p.gender === 'FEMALE' ? 'F' : 'U'}`);
+      const birthDate = formatDate(p.birthDate);
+      if (birthDate) {
+        lines.push('1 BIRT');
+        lines.push(`2 DATE ${birthDate}`);
+        if (p.birthPlace) {
+          lines.push(`2 PLAC ${p.birthPlace}`);
+        }
+      }
+      const deathDate = formatDate(p.deathDate);
+      if (deathDate) {
+        lines.push('1 DEAT');
+        lines.push(`2 DATE ${deathDate}`);
+      }
+    }
+
+    // Families
+    const families: Array<{
+      id: string;
+      husband?: string;
+      wife?: string;
+      children: string[];
+    }> = [];
+
+    // Spouse-based families
+    let famCounter = 1;
+    for (const edge of spouseEdges) {
+      const famId = `F${famCounter++}`;
+      families.push({
+        id: famId,
+        husband: edge.spouse1Id,
+        wife: edge.spouse2Id,
+        children: [],
+      });
+    }
+
+    // Helper: find or create family for parent when no spouse family exists
+    const ensureFamilyForParent = (parentId: string): number => {
+      for (let i = 0; i < families.length; i++) {
+        const fam = families[i];
+        if (fam.husband === parentId || fam.wife === parentId) {
+          return i;
+        }
+      }
+      const famId = `F${famCounter++}`;
+      families.push({ id: famId, husband: parentId, children: [] });
+      return families.length - 1;
+    };
+
+    for (const edge of parentChildEdges) {
+      const famIndex = ensureFamilyForParent(edge.parentId);
+      families[famIndex].children.push(edge.childId);
+    }
+
+    for (const fam of families) {
+      lines.push(`0 @${fam.id}@ FAM`);
+      if (fam.husband) {
+        const role = personMap.get(fam.husband)?.gender === 'FEMALE' ? 'WIFE' : 'HUSB';
+        lines.push(`1 ${role} @${fam.husband}@`);
+      }
+      if (fam.wife) {
+        const role = personMap.get(fam.wife)?.gender === 'MALE' ? 'HUSB' : 'WIFE';
+        lines.push(`1 ${role} @${fam.wife}@`);
+      }
+      for (const child of fam.children) {
+        lines.push(`1 CHIL @${child}@`);
+      }
+    }
+
+    lines.push('0 TRLR');
+    return lines.join('\n');
   }
 
   /**

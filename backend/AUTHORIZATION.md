@@ -535,3 +535,22 @@ These fire **after** the operation succeeds; failures do not log.
 - **Rate limiting**: Prevent brute force attacks on /auth/login
 - **User registration**: Self-service sign-up endpoint
 - **Password reset**: Email-based password recovery
+
+---
+
+# Data Export (Owner-Only)
+
+## Endpoints
+- `GET /trees/:treeId/export/json` — JSON snapshot of the stored tree (persons, parent-child edges, spouse edges, owner/members, version, timestamps).
+- `GET /trees/:treeId/export/gedcom` — GEDCOM text export (read-only; no import endpoint).
+
+## Permissions
+- Owner only. Requests from non-owners return 403.
+- Guard gating still applies: if `ENABLE_AUTH_GUARD` is disabled, controllers fall back to default owner context for tests.
+
+## Behavior
+- Exports are assembled in the application layer using repository snapshots; no domain mutations occur.
+- GEDCOM export is best-effort, read-only; format is suitable for download/sharing but not used for import in this service.
+
+## Testing
+- Minimal e2e coverage added for both export endpoints.

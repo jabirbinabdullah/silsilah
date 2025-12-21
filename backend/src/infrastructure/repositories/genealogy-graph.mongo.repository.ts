@@ -25,6 +25,7 @@ interface FamilyTreeDocument {
 export interface GenealogyGraphRepository {
   findById(treeId: string): Promise<GenealogyGraph | null>;
   save(aggregate: GenealogyGraph): Promise<void>;
+  getSnapshot(treeId: string): Promise<FamilyTreeDocument | null>;
 }
 
 export class MongoGenealogyGraphRepository implements GenealogyGraphRepository {
@@ -160,5 +161,13 @@ export class MongoGenealogyGraphRepository implements GenealogyGraphRepository {
         `Optimistic locking failure: tree ${treeId} was modified by another process`,
       );
     }
+  }
+
+  async getSnapshot(treeId: string): Promise<FamilyTreeDocument | null> {
+    const doc = await this.collection.findOne({ _id: treeId });
+    if (!doc) {
+      return null;
+    }
+    return doc;
   }
 }

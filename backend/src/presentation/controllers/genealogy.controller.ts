@@ -10,6 +10,7 @@ import {
   HttpException,
   UseGuards,
   Req,
+  Header,
 } from '@nestjs/common';
 import { Request } from 'express';
 import { GenealogyApplicationService } from '../../application/services/genealogy-application.service';
@@ -332,6 +333,53 @@ export class GenealogyController {
       }
 
       return result as RenderTreeResponseDto;
+    } catch (err) {
+      this.handleDomainError(err);
+    }
+  }
+
+  /**
+   * GET /trees/:id/export/json
+   * Owner-only: export full tree snapshot as JSON
+   */
+  @Get(':treeId/export/json')
+  async exportJson(
+    @Param('treeId') treeId: string,
+    @Req() req: Request,
+  ) {
+    try {
+      const userContext = this.getUserContext(req);
+      this.appService.setUserContext(userContext);
+
+      if (userContext.role !== 'OWNER') {
+        throw new AuthorizationError('Only owners can export');
+      }
+
+      return await this.appService.exportTreeSnapshot(treeId);
+    } catch (err) {
+      this.handleDomainError(err);
+    }
+  }
+
+  /**
+   * GET /trees/:id/export/gedcom
+   * Owner-only: export tree as GEDCOM text (read-only)
+   */
+  @Get(':treeId/export/gedcom')
+  @Header('Content-Type', 'text/plain; charset=utf-8')
+  async exportGedcom(
+    @Param('treeId') treeId: string,
+    @Req() req: Request,
+  ): Promise<string> {
+    try {
+      const userContext = this.getUserContext(req);
+      this.appService.setUserContext(userContext);
+
+      if (userContext.role !== 'OWNER') {
+        throw new AuthorizationError('Only owners can export');
+      }
+
+      return await this.appService.exportTreeGedcom(treeId);
     } catch (err) {
       this.handleDomainError(err);
     }
