@@ -15,6 +15,9 @@ docker run -p 3000:3000 \
   silsilah-backend
 ```
 
+### Health Checks
+The Docker image includes a `HEALTHCHECK` instruction that pings `/health` every 30 seconds with a 5-second timeout. Orchestrators (Docker Compose, Kubernetes, ECS) will use this to monitor container health and trigger restarts if the endpoint fails 3 times consecutively. You can also call `/ready` to probe MongoDB connectivity specifically.
+
 ## Environment Separation
 - `.env.example` documents variables for dev/test/prod.
 - Recommended:
