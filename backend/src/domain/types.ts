@@ -86,3 +86,17 @@ export interface FamilyTreeSnapshot {
   ownerId: string;
   members: Member[];
 }
+
+export interface User {
+  id: string;
+  username: string;
+  email?: string | null;
+  passwordHash: string;
+  role: UserRole;
+  createdAt: Date;
+}
+
+export interface UserCredentials {
+  username: string;
+  password: string;
+}

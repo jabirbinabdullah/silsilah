@@ -291,3 +291,247 @@ Ownership metadata is stored in the family_trees collection with optimistic lock
 - **Member invitations**: Send invites before confirming membership
 - **Access audit trail**: Log all membership changes
 - **Default tree access**: Grant organization-wide access by default
+
+---
+
+# JWT Authentication
+
+## Overview
+
+The Genealogy Application uses JWT (JSON Web Tokens) for stateless authentication. Users obtain tokens via the /auth/login endpoint and include them in subsequent requests via the Authorization header.
+
+## Authentication Flow
+
+### 1. User Login
+
+**Endpoint:** `POST /auth/login`
+
+**Request:**
+\\\json
+{
+  "username": "john_doe",
+  "password": "secure_password_123"
+}
+\\\
+
+**Response (200 OK):**
+\\\json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "userId": "user-123",
+  "username": "john_doe",
+  "role": "EDITOR"
+}
+\\\
+
+**Errors:**
+- `400 Bad Request`: Missing username or password
+- `401 Unauthorized`: Invalid username or password
+
+### 2. Token Structure
+
+JWT tokens are signed using the server's secret key and contain:
+
+\\\	ypescript
+interface JwtPayload {
+  userId: string;
+  username: string;
+  role: 'OWNER' | 'EDITOR' | 'VIEWER';
+  iat: number;  // Issued at
+  exp: number;  // Expiration time (24 hours from issuance)
+}
+\\\
+
+### 3. Token Usage
+
+Include the token in the Authorization header of all subsequent requests:
+
+```
+Authorization: Bearer <token>
+```
+
+**Example:**
+
+```
+curl -H "Authorization: Bearer eyJhbGciOi..." POST http://localhost:3000/trees
+```
+
+### 3a. Guard Gating (dev/test)
+
+- Global JWT guard is enabled only when `ENABLE_AUTH_GUARD=true` (default: disabled for fast local/e2e runs).
+- When disabled, controllers fall back to a default `UserContext` so endpoints remain callable without tokens.
+- `/auth/login` is always allowed (guard bypass) so tokens can be issued even when the guard is enabled.
+
+### 4. Token Verification
+
+The `JwtGuard` intercepts all incoming requests to protected endpoints and:
+1. Extracts the token from the Authorization header
+2. Verifies the token signature using the server's secret
+3. Checks token expiration
+4. Extracts the user claims and builds a `UserContext`
+5. Attaches the `UserContext` to the request for the controller to use
+
+**Token Validation Errors:**
+- `401 Unauthorized`: Missing Authorization header
+- `401 Unauthorized`: Invalid or malformed token
+- `401 Unauthorized`: Token has expired
+
+## Implementation Details
+
+### Password Security
+
+Passwords are hashed using **bcrypt** with a salt round of 10:
+- No plaintext passwords are stored
+- Hashes are one-way and cannot be reversed
+- Each password hash is unique due to salting
+
+### JWT Secret
+
+The JWT secret is configured via environment variable:
+
+\\\ash
+# .env
+JWT_SECRET=your-secret-key-at-least-32-characters-long
+\\\
+
+- Must be at least 32 characters
+- Should be a random, high-entropy string
+- Must be kept secret and not committed to version control
+
+### Token Expiration
+
+Tokens expire after **24 hours** by default. After expiration:
+- Token verification fails with `TokenExpiredError`
+- User must log in again to obtain a new token
+- No refresh token mechanism (future enhancement)
+
+### Local Testing Tips
+
+- Seed a demo user: `npm run seed:user` (uses `.env` or defaults) then call `/auth/login`.
+- Minimal auth test: `npm run test:e2e -- --testPathPattern=auth.e2e` to validate login quickly.
+- Full suite without tokens: leave `ENABLE_AUTH_GUARD` unset/false; legacy genealogy endpoints stay open for fast e2e runs.
+
+## Authorization in Protected Endpoints
+
+Once a token is verified, the controller:
+1. Extracts the `UserContext` from the request
+2. Sets the context on the application service: `appService.setUserContext(userContext)`
+3. Invokes command/query handlers
+4. Authorization checks in the service enforce role-based rules
+
+**Example Controller Code:**
+\\\	ypescript
+@UseGuards(JwtGuard)
+@Controller('trees')
+export class GenealogyController {
+  @Post()
+  async createTree(
+    @Body() dto: CreateFamilyTreeDto,
+    @Req() req: Request,
+  ) {
+    const userContext = (req as any).userContext;
+    this.appService.setUserContext(userContext);
+    return this.appService.handleCreateFamilyTree({ treeId: dto.treeId });
+  }
+}
+\\\
+
+## User Management
+
+### Creating Users
+
+Users must be created via database seed or dedicated admin endpoint (not yet implemented).
+
+\\\	ypescript
+const user: User = {
+  id: 'user-123',
+  username: 'john_doe',
+  email: 'john@example.com',
+  passwordHash: await authService.hashPassword('secure_password'),
+  role: 'EDITOR',
+  createdAt: new Date(),
+};
+
+await userRepository.create(user);
+\\\
+
+### User Persistence
+
+Users are stored in MongoDB `users` collection:
+
+\\\	ypescript
+interface UserDocument {
+  _id: string;  // User ID
+  username: string;
+  email?: string | null;
+  passwordHash: string;  // bcrypt hash
+  role: 'OWNER' | 'EDITOR' | 'VIEWER';
+  createdAt: Date;
+}
+\\\
+
+## Error Handling
+
+### Authentication Errors
+
+| Error           | HTTP Status | Cause                      |
+|-----------------|-------------|----------------------------|
+| InvalidCredentials | 401 | Wrong username/password |
+| TokenInvalid    | 401 | Malformed or invalid token |
+| TokenExpired    | 401 | Token has expired          |
+| Missing Header  | 401 | No Authorization header    |
+
+### Error Response Format
+
+\\\json
+{
+  "statusCode": 401,
+  "message": "Invalid or malformed token",
+  "error": "Unauthorized"
+}
+\\\
+
+---
+
+# Audit Logging (Append-Only)
+
+## Overview
+
+All successful mutations append an entry to the `audit_logs` collection. Logs are write-only and append-only; no update/delete is performed.
+
+## Recorded Fields
+
+| Field     | Description                         |
+|-----------|-------------------------------------|
+| treeId    | Target tree identifier              |
+| action    | Operation code (e.g., CREATE_PERSON) |
+| userId    | Acting user (or `anonymous`)        |
+| username  | Acting username (or `anonymous`)    |
+| role      | Acting role (or `UNKNOWN`)          |
+| timestamp | UTC timestamp when action completed |
+
+## Triggers (application layer)
+
+- `handleCreateFamilyTree`
+- `handleCreatePerson`
+- `handleEstablishParentChild`
+- `handleEstablishSpouse`
+- `handleRemoveRelationship`
+- `handleRemovePerson`
+- `addMember`
+- `removeMember`
+- `changeMemberRole`
+- `transferOwnership`
+
+These fire **after** the operation succeeds; failures do not log.
+
+## Future Enhancements
+
+- **Refresh tokens**: Issue short-lived access tokens + long-lived refresh tokens
+- **Multi-factor authentication (MFA)**: Add TOTP or SMS verification
+- **OAuth2/OpenID Connect**: Support third-party identity providers
+- **Session invalidation**: Logout/revoke tokens
+- **Token blacklist**: Revoke specific tokens early
+- **Rate limiting**: Prevent brute force attacks on /auth/login
+- **User registration**: Self-service sign-up endpoint
+- **Password reset**: Email-based password recovery

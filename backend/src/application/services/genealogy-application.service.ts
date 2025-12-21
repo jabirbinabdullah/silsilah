@@ -4,7 +4,7 @@ import {
   OwnershipError,
   MembershipError,
 } from '../../domain/errors';
-import type { GenealogyGraphRepository } from '../../infrastructure/repositories';
+import type { AuditLogRepository, GenealogyGraphRepository } from '../../infrastructure/repositories';
 import { CreateFamilyTreeHandler, type CreateFamilyTreeCommand } from '../commands/create-family-tree.command';
 import { CreatePersonHandler, type CreatePersonCommand } from '../commands/create-person.command';
 import { EstablishParentChildHandler, type EstablishParentChildCommand } from '../commands/establish-parent-child.command';
@@ -28,6 +28,7 @@ export class GenealogyApplicationService {
   private readonly getDescendants: GetDescendantsHandler;
   private readonly renderTree: RenderGenealogyTreeHandler;
   private readonly repository: GenealogyGraphRepository;
+  private readonly auditLogRepository?: AuditLogRepository;
   private userContext?: UserContext;
   private readonly requiresAuth: boolean;
 
@@ -35,8 +36,10 @@ export class GenealogyApplicationService {
     repository: GenealogyGraphRepository,
     factory: GenealogyGraphFactory,
     requiresAuth: boolean = false,
+    auditLogRepository?: AuditLogRepository,
   ) {
     this.repository = repository;
+    this.auditLogRepository = auditLogRepository;
     this.createFamilyTree = new CreateFamilyTreeHandler(repository, factory);
     this.createPerson = new CreatePersonHandler(repository);
     this.establishParentChild = new EstablishParentChildHandler(repository);
@@ -56,6 +59,27 @@ export class GenealogyApplicationService {
    */
   setUserContext(context: UserContext): void {
     this.userContext = context;
+  }
+
+  private async appendAudit(action: string, treeId: string): Promise<void> {
+    if (!this.auditLogRepository) return;
+
+    const user = this.userContext;
+    const entry = {
+      treeId,
+      action,
+      userId: user?.userId ?? 'anonymous',
+      username: user?.username ?? 'anonymous',
+      role: user?.role ?? 'UNKNOWN',
+      timestamp: new Date(),
+    } as const;
+
+    try {
+      await this.auditLogRepository.append(entry);
+    } catch (err) {
+      // Do not block core operations on audit failures
+      console.warn('Audit log append failed', err);
+    }
   }
 
   /**
@@ -107,32 +131,44 @@ export class GenealogyApplicationService {
   // Commands (mutations require EDITOR or OWNER)
   async handleCreateFamilyTree(cmd: CreateFamilyTreeCommand) {
     this.requireMutation();
-    return this.createFamilyTree.execute(cmd);
+    const result = await this.createFamilyTree.execute(cmd);
+    await this.appendAudit('CREATE_FAMILY_TREE', cmd.treeId);
+    return result;
   }
 
   async handleCreatePerson(cmd: CreatePersonCommand) {
     this.requireMutation();
-    return this.createPerson.execute(cmd);
+    const result = await this.createPerson.execute(cmd);
+    await this.appendAudit('CREATE_PERSON', cmd.treeId);
+    return result;
   }
 
   async handleEstablishParentChild(cmd: EstablishParentChildCommand) {
     this.requireMutation();
-    return this.establishParentChild.execute(cmd);
+    const result = await this.establishParentChild.execute(cmd);
+    await this.appendAudit('ESTABLISH_PARENT_CHILD', cmd.treeId);
+    return result;
   }
 
   async handleEstablishSpouse(cmd: EstablishSpouseCommand) {
     this.requireMutation();
-    return this.establishSpouse.execute(cmd);
+    const result = await this.establishSpouse.execute(cmd);
+    await this.appendAudit('ESTABLISH_SPOUSE', cmd.treeId);
+    return result;
   }
 
   async handleRemoveRelationship(cmd: RemoveRelationshipCommand) {
     this.requireMutation();
-    return this.removeRelationship.execute(cmd);
+    const result = await this.removeRelationship.execute(cmd);
+    await this.appendAudit('REMOVE_RELATIONSHIP', cmd.treeId);
+    return result;
   }
 
   async handleRemovePerson(cmd: RemovePersonCommand) {
     this.requireOwner();
-    return this.removePerson.execute(cmd);
+    const result = await this.removePerson.execute(cmd);
+    await this.appendAudit('REMOVE_PERSON', cmd.treeId);
+    return result;
   }
 
   // Queries (allowed for VIEWER, EDITOR, OWNER)
@@ -188,6 +224,7 @@ export class GenealogyApplicationService {
 
     const updatedMembers: Member[] = [...ownership.members, { userId, role }];
     await (this.repository as any).updateOwnership(treeId, ownership.ownerId, updatedMembers);
+    await this.appendAudit('ADD_MEMBER', treeId);
   }
 
   /**
@@ -223,6 +260,7 @@ export class GenealogyApplicationService {
     }
 
     await (this.repository as any).updateOwnership(treeId, ownership.ownerId, updatedMembers);
+    await this.appendAudit('REMOVE_MEMBER', treeId);
   }
 
   /**
@@ -269,6 +307,8 @@ export class GenealogyApplicationService {
       updatedMembers[memberIndex] = { userId, role: newRole };
       await (this.repository as any).updateOwnership(treeId, ownership.ownerId, updatedMembers);
     }
+
+    await this.appendAudit('CHANGE_MEMBER_ROLE', treeId);
   }
 
   /**
@@ -315,5 +355,6 @@ export class GenealogyApplicationService {
     }
 
     await (this.repository as any).updateOwnership(treeId, newOwnerId, updatedMembers);
+    await this.appendAudit('TRANSFER_OWNERSHIP', treeId);
   }
 }
