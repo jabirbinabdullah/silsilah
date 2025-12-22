@@ -1,0 +1,75 @@
+# Read API Contract (Frontend)
+
+Context:
+- Backend follows DDD with a single aggregate root: `GenealogyGraph`.
+- Frontend is strictly read-only. No client-side business rules.
+- All mutations occur via application commands executed server-side.
+
+## Frontend Read Contract
+This contract enumerates the ONLY read queries permitted for frontend consumption. No other queries are exposed to the frontend.
+
+### Query: getTreeRenderData(treeId)
+- Name: `getTreeRenderData`
+- Input parameters:
+  - `treeId`
+- Output DTO shape (fields only):
+  - `treeId`
+  - `nodes`: array of objects with fields:
+    - `id`
+    - `label`
+  - `spouseEdges`: array of objects with fields:
+    - `personAId`
+    - `personBId`
+  - `parentChildEdges`: array of objects with fields:
+    - `parentId`
+    - `childId`
+- Explicit non-guarantees:
+  - No guarantee of order for `nodes` or edges.
+  - No guarantee of completeness if server-side policies filter data.
+  - No guarantee of derived computations (e.g., inferred relationships) beyond provided fields.
+  - No promise of stability for labels across releases; labels are server-defined display strings.
+
+### Query: getPersonDetails(treeId, personId)
+- Name: `getPersonDetails`
+- Input parameters:
+  - `treeId`
+  - `personId`
+- Output DTO shape (fields only):
+  - `treeId`
+  - `personId`
+  - `person`: object with fields:
+    - `id`
+    - `label`
+    - `attributes`: object whose fields are server-defined, e.g.:
+      - `name`
+      - `birthDate`
+      - `deathDate`
+      - `gender`
+- Explicit non-guarantees:
+  - No guarantee that any attribute is present; absence is valid.
+  - No guarantee of attribute semantics beyond field names; values are opaque strings for display.
+  - No guarantee of referential completeness (linked entities may be absent).
+  - No guarantee of sort order inside nested collections.
+
+### Query: getRelationshipEdges(treeId)
+- Name: `getRelationshipEdges`
+- Input parameters:
+  - `treeId`
+- Output DTO shape (fields only):
+  - `treeId`
+  - `spouseEdges`: array of objects with fields:
+    - `personAId`
+    - `personBId`
+  - `parentChildEdges`: array of objects with fields:
+    - `parentId`
+    - `childId`
+- Explicit non-guarantees:
+  - No guarantee of edge order or pagination stability.
+  - No guarantee of inferred or transitive relationships; only explicit edges are returned.
+  - No guarantee of completeness if server-side policies filter edges.
+
+## Mutation Boundary Statement
+- Frontend never mutates domain state directly.
+- Frontend does not perform `PATCH` operations or partial updates.
+- All domain mutations are encapsulated as server-side commands that are atomic and intention-revealing.
+- This is a hard architectural rule, not a suggestion.
