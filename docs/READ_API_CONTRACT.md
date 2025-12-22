@@ -8,6 +8,8 @@ Context:
 ## Frontend Read Contract
 This contract enumerates the ONLY read queries permitted for frontend consumption. No other queries are exposed to the frontend.
 
+**Note on server-side filtering:** Server-side filtering refers only to authorization and ownership rules. Data is never partially filtered for layout, performance, or presentation reasons.
+
 ### Query: getTreeRenderData(treeId)
 - Name: `getTreeRenderData`
 - Input parameters:
@@ -16,7 +18,7 @@ This contract enumerates the ONLY read queries permitted for frontend consumptio
   - `treeId`
   - `nodes`: array of objects with fields:
     - `id`
-    - `label`
+    - `displayName` (string; opaque, server-defined, non-stable)
   - `spouseEdges`: array of objects with fields:
     - `personAId`
     - `personBId`
@@ -27,7 +29,7 @@ This contract enumerates the ONLY read queries permitted for frontend consumptio
   - No guarantee of order for `nodes` or edges.
   - No guarantee of completeness if server-side policies filter data.
   - No guarantee of derived computations (e.g., inferred relationships) beyond provided fields.
-  - No promise of stability for labels across releases; labels are server-defined display strings.
+  - `displayName` is for presentation only and must not be used for identity, sorting, or business logic.
 
 ### Query: getPersonDetails(treeId, personId)
 - Name: `getPersonDetails`
@@ -39,7 +41,7 @@ This contract enumerates the ONLY read queries permitted for frontend consumptio
   - `personId`
   - `person`: object with fields:
     - `id`
-    - `label`
+    - `displayName` (string; opaque, server-defined, non-stable)
     - `attributes`: object whose fields are server-defined, e.g.:
       - `name`
       - `birthDate`
@@ -67,6 +69,8 @@ This contract enumerates the ONLY read queries permitted for frontend consumptio
   - No guarantee of edge order or pagination stability.
   - No guarantee of inferred or transitive relationships; only explicit edges are returned.
   - No guarantee of completeness if server-side policies filter edges.
+
+This query exists to support relationship inspection and debugging. Frontend must not assume equivalence with getTreeRenderData edge sets.
 
 ## Mutation Boundary Statement
 - Frontend never mutates domain state directly.
