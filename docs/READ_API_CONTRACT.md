@@ -77,3 +77,4 @@ This query exists to support relationship inspection and debugging. Frontend mus
 - Frontend does not perform `PATCH` operations or partial updates.
 - All domain mutations are encapsulated as server-side commands that are atomic and intention-revealing.
 - This is a hard architectural rule, not a suggestion.
+- Frontend must not attempt to emulate domain rules or validate business invariants.
