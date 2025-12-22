@@ -31,6 +31,14 @@ This contract enumerates the ONLY read queries permitted for frontend consumptio
   - No guarantee of derived computations (e.g., inferred relationships) beyond provided fields.
   - `displayName` is for presentation only and must not be used for identity, sorting, or business logic.
 
+#### Traversal Semantics
+- `nodes` represent individuals in the tree; `id` is the stable identifier.
+- `spouseEdges` are undirected: `(personAId, personBId)` indicates a spousal relationship with no ordering semantics.
+- `parentChildEdges` are directed: `parentId` → `childId` represents a parent-child relationship.
+- Frontend must not infer transitive relationships (e.g., grandparent, sibling) beyond explicit edges.
+- Frontend must not assume cyclical validation; malformed data (cycles, dangling references) may occur and must be handled gracefully.
+- No guarantee of a single root node or tree connectedness; the graph may be disconnected or contain multiple roots.
+
 ### Query: getPersonDetails(treeId, personId)
 - Name: `getPersonDetails`
 - Input parameters:
