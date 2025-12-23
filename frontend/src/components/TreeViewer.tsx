@@ -1,116 +1,221 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { getPublicRenderData, type TreeRenderV1 } from '../api';
-import * as d3 from 'd3';
+import { getPublicRenderData, type TreeRenderV1, RenderEdgeData } from '../api';
+import { TreeCanvas } from './TreeCanvas';
+import { PersonDetailsDrawer, RelationshipCounts } from './PersonDetailsDrawer';
+import { PersonRelationships, FamilyNode } from './PersonRelationships';
 
 export function TreeViewer() {
   const { treeId = '' } = useParams();
   const [data, setData] = useState<TreeRenderV1 | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
 
-  const containerRef = useRef<SVGSVGElement | null>(null);
-
+  // Fetch tree data
   useEffect(() => {
     setLoading(true);
     setError(null);
     setData(null);
+    setSelectedPersonId(null);
     getPublicRenderData(treeId)
-      .then(setData)
+      .then((rawData) => {
+        // Transform old format to new format if needed
+        if (rawData.spouseEdges || rawData.parentChildEdges) {
+          let edgeId = 0;
+          const edges: RenderEdgeData[] = [];
+
+          // Convert spouseEdges (old format)
+          if (rawData.spouseEdges) {
+            rawData.spouseEdges.forEach((edge) => {
+              edges.push({
+                id: `edge-${edgeId++}`,
+                source: edge.personAId,
+                target: edge.personBId,
+                type: 'spouse',
+              });
+            });
+          }
+
+          // Convert parentChildEdges (old format)
+          if (rawData.parentChildEdges) {
+            rawData.parentChildEdges.forEach((edge) => {
+              edges.push({
+                id: `edge-${edgeId++}`,
+                source: edge.personAId,
+                target: edge.personBId,
+                type: 'parent-child',
+              });
+            });
+          }
+
+          setData({
+            ...rawData,
+            edges,
+          });
+        } else {
+          setData(rawData);
+        }
+      })
       .catch((e) => setError(e?.message || 'Failed to load'))
       .finally(() => setLoading(false));
   }, [treeId]);
 
-  useEffect(() => {
-    if (!data || !containerRef.current) return;
+  // Derive relationships from tree data
+  const { relationshipCounts, parents, children, spouses, relatedEdgeIds } = useMemo(() => {
+    if (!data || !selectedPersonId) {
+      return {
+        relationshipCounts: { parents: 0, children: 0, spouses: 0 },
+        parents: [],
+        children: [],
+        spouses: [],
+        relatedEdgeIds: new Set<string>(),
+      };
+    }
 
-    const width = containerRef.current.clientWidth || 900;
-    const height = 600;
+    // Build index of node IDs for validation
+    const nodeIds = new Set(data.nodes.map((n) => n.id));
+    const nodeMap = new Map(data.nodes.map((n) => [n.id, n]));
 
-    const svg = d3
-      .select(containerRef.current)
-      .attr('viewBox', `0 0 ${width} ${height}`)
-      .attr('width', '100%')
-      .attr('height', height)
-      .style('background', '#fff');
+    // Build adjacency for relationships
+    const parentOf = new Set<string>();
+    const childOf = new Set<string>();
+    const spouseOf = new Set<string>();
+    const relatedEdges = new Set<string>();
 
-    svg.selectAll('*').remove();
+    // Find parent-child relationships
+    data.edges.forEach((edge) => {
+      if (edge.type === 'parent-child') {
+        if (edge.target === selectedPersonId && nodeIds.has(edge.source)) {
+          parentOf.add(edge.source);
+          relatedEdges.add(edge.id);
+        }
+        if (edge.source === selectedPersonId && nodeIds.has(edge.target)) {
+          childOf.add(edge.target);
+          relatedEdges.add(edge.id);
+        }
+      }
+    });
 
-    const nodes = data.nodes.map((n) => ({ id: n.id, label: n.displayName }));
-    const edges = [
-      ...data.parentChildEdges.map((e) => ({ source: e.personAId, target: e.personBId, type: 'PARENT_CHILD' })),
-      ...data.spouseEdges.map((e) => ({ source: e.personAId, target: e.personBId, type: 'SPOUSE' })),
-    ];
+    // Find spouse relationships
+    data.edges.forEach((edge) => {
+      if (edge.type === 'spouse') {
+        if (edge.source === selectedPersonId && nodeIds.has(edge.target)) {
+          spouseOf.add(edge.target);
+          relatedEdges.add(edge.id);
+        }
+        if (edge.target === selectedPersonId && nodeIds.has(edge.source)) {
+          spouseOf.add(edge.source);
+          relatedEdges.add(edge.id);
+        }
+      }
+    });
 
-    const nodeMap = new Map(nodes.map((n) => [n.id, n]));
-    const validEdges = edges.filter((e) => nodeMap.has(e.source) && nodeMap.has(e.target));
+    const parentsList: FamilyNode[] = Array.from(parentOf)
+      .map((id) => nodeMap.get(id)!)
+      .filter(Boolean)
+      .map((n) => ({ personId: n.id, displayName: n.displayName }));
 
-    const sim = d3
-      .forceSimulation(nodes as any)
-      .force('link', d3.forceLink(validEdges as any).id((d: any) => d.id).distance((e: any) => (e.type === 'SPOUSE' ? 50 : 80)))
-      .force('charge', d3.forceManyBody().strength(-200))
-      .force('center', d3.forceCenter(width / 2, height / 2))
-      .stop();
+    const childrenList: FamilyNode[] = Array.from(childOf)
+      .map((id) => nodeMap.get(id)!)
+      .filter(Boolean)
+      .map((n) => ({ personId: n.id, displayName: n.displayName }));
 
-    for (let i = 0; i < 300; i++) sim.tick();
+    const spousesList: FamilyNode[] = Array.from(spouseOf)
+      .map((id) => nodeMap.get(id)!)
+      .filter(Boolean)
+      .map((n) => ({ personId: n.id, displayName: n.displayName }));
 
-    const link = svg
-      .append('g')
-      .attr('stroke', '#aaa')
-      .attr('stroke-width', 1.5)
-      .selectAll('line')
-      .data(validEdges)
-      .enter()
-      .append('line')
-      .attr('x1', (d: any) => (nodeMap.get(d.source)?.x as number) || 0)
-      .attr('y1', (d: any) => (nodeMap.get(d.source)?.y as number) || 0)
-      .attr('x2', (d: any) => (nodeMap.get(d.target)?.x as number) || 0)
-      .attr('y2', (d: any) => (nodeMap.get(d.target)?.y as number) || 0)
-      .attr('stroke', (d: any) => (d.type === 'SPOUSE' ? '#0ea5e9' : '#94a3b8'));
-
-    const nodeG = svg
-      .append('g')
-      .selectAll('g')
-      .data(nodes as any)
-      .enter()
-      .append('g')
-      .attr('transform', (d: any) => `translate(${d.x || 0},${d.y || 0})`);
-
-    nodeG
-      .append('circle')
-      .attr('r', 18)
-      .attr('fill', '#f1f5f9')
-      .attr('stroke', '#334155')
-      .attr('stroke-width', 1.5);
-
-    nodeG
-      .append('text')
-      .text((d: any) => (d.label || d.id))
-      .attr('text-anchor', 'middle')
-      .attr('dy', 36)
-      .attr('font-size', 11)
-      .attr('fill', '#334155');
-
-    return () => {
-      svg.selectAll('*').remove();
+    return {
+      relationshipCounts: {
+        parents: parentsList.length,
+        children: childrenList.length,
+        spouses: spousesList.length,
+      },
+      parents: parentsList,
+      children: childrenList,
+      spouses: spousesList,
+      relatedEdgeIds: relatedEdges,
     };
-  }, [data]);
+  }, [data, selectedPersonId]);
 
   return (
-    <div style={{ display: 'grid', gap: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Link to="/">
-          <button style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #ccc', background: '#fff' }}>← Back</button>
-        </Link>
-        <h2 style={{ margin: 0, flex: 1 }}>Tree Viewer: {treeId}</h2>
+    <div className="h-screen flex flex-col bg-gray-50">
+      {/* Header */}
+      <div className="border-b border-gray-200 bg-white px-6 py-4">
+        <div className="flex items-center gap-3">
+          <Link to="/">
+            <button className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded border border-gray-300 text-sm font-medium transition-colors">
+              ← Back
+            </button>
+          </Link>
+          <h1 className="text-2xl font-bold text-gray-900">Tree: {treeId}</h1>
+        </div>
       </div>
 
-      {loading && <div>Loading…</div>}
-      {error && <div style={{ color: 'crimson' }}>{error}</div>}
+      {/* Loading / Error */}
+      {loading && (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-gray-600">Loading tree data…</div>
+        </div>
+      )}
 
-      <svg ref={containerRef} style={{ width: '100%', minHeight: 600, border: '1px solid #eee', borderRadius: 8 }} />
+      {error && (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="bg-red-50 border border-red-200 rounded-lg px-6 py-4 text-red-700">
+            {error}
+          </div>
+        </div>
+      )}
 
-      <div style={{ fontSize: 12, color: '#888' }}>Edges: blue = spouse, gray = parent-child</div>
+      {/* Main Content */}
+      {data && !loading && !error && (
+        <div className="flex-1 flex overflow-hidden">
+          {/* Canvas */}
+          <div className="flex-1 bg-gray-100 relative">
+            <TreeCanvas
+              data={data}
+              selectedPersonId={selectedPersonId}
+              relatedEdgeIds={relatedEdgeIds}
+              onNodeClick={setSelectedPersonId}
+            />
+          </div>
+
+          {/* Drawer */}
+          <PersonDetailsDrawer
+            treeId={treeId}
+            personId={selectedPersonId}
+            relationshipCounts={relationshipCounts}
+            onClose={() => setSelectedPersonId(null)}
+            onSelectPerson={setSelectedPersonId}
+          />
+
+          {/* Sidebar when drawer isn't visible */}
+          {!selectedPersonId && (
+            <div className="w-72 bg-white border-l border-gray-200 p-6 overflow-y-auto">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">How to Use</h2>
+              <ul className="space-y-3 text-sm text-gray-600">
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 font-bold">●</span>
+                  <span>Click any node to view person details</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 font-bold">●</span>
+                  <span>Blue edges connect spouses, gray edges show parent-child</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 font-bold">●</span>
+                  <span>Click related names in the drawer to navigate</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 font-bold">●</span>
+                  <span>Scroll and zoom to explore the tree</span>
+                </li>
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

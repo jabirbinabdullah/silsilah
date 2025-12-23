@@ -4,18 +4,20 @@ import { TreeViewer } from './components/TreeViewer';
 
 export function App() {
   return (
-    <div style={{ padding: '16px', fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' }}>
-      <header style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-        <Link to="/" style={{ textDecoration: 'none', color: 'inherit' }}>
-          <h1 style={{ margin: 0, fontSize: 20 }}>Silsilah</h1>
+    <div className="h-screen w-screen bg-gray-50 flex flex-col">
+      <header className="bg-white border-b border-gray-200 px-6 py-4">
+        <Link to="/" className="flex items-center gap-3 no-underline">
+          <h1 className="text-2xl font-bold text-gray-900">Silsilah</h1>
+          <span className="text-sm text-gray-500">Genealogy • Read-only</span>
         </Link>
-        <span style={{ color: '#94a3b8', fontSize: 12 }}>Read-only Milestone • Tree List + Viewer</span>
       </header>
 
-      <Routes>
-        <Route path="/" element={<TreeList />} />
-        <Route path="/trees/:treeId" element={<TreeViewer />} />
-      </Routes>
+      <div className="flex-1 overflow-auto">
+        <Routes>
+          <Route path="/" element={<TreeList />} />
+          <Route path="/trees/:treeId" element={<TreeViewer />} />
+        </Routes>
+      </div>
     </div>
   );
 }
