@@ -21,7 +21,7 @@ export const PersonDetailsDrawer: React.FC<PersonDetailsDrawerProps> = ({
   relationshipCounts,
   onClose,
   onSelectPerson,
-}) => {
+}: PersonDetailsDrawerProps) => {
   const [person, setPerson] = useState<PersonDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

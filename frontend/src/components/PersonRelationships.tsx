@@ -13,19 +13,21 @@ type PersonRelationshipsProps = {
   onSelectPerson: (personId: string) => void;
 };
 
-const FamilySection: React.FC<{
+type FamilySectionProps = {
   title: string;
   members: FamilyNode[];
   selectedPersonId: string;
   onSelectPerson: (personId: string) => void;
-}> = ({ title, members, selectedPersonId, onSelectPerson }) => {
+};
+
+const FamilySection: React.FC<FamilySectionProps> = ({ title, members, selectedPersonId, onSelectPerson }) => {
   if (members.length === 0) return null;
 
   return (
     <div className="mb-4">
       <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">{title}</h3>
       <ul className="space-y-1">
-        {members.map((member) => (
+        {members.map((member: FamilyNode) => (
           <li key={member.personId}>
             <button
               onClick={() => onSelectPerson(member.personId)}
@@ -50,7 +52,7 @@ export const PersonRelationships: React.FC<PersonRelationshipsProps> = ({
   spouses,
   selectedPersonId,
   onSelectPerson,
-}) => {
+}: PersonRelationshipsProps) => {
   const hasAnyRelationships = parents.length > 0 || children.length > 0 || spouses.length > 0;
 
   if (!hasAnyRelationships) {
