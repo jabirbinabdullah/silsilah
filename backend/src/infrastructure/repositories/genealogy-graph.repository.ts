@@ -21,4 +21,17 @@ export interface GenealogyGraphRepository {
     createdAt: Date;
     updatedAt: Date;
   } | null>;
+  
+  /**
+   * List all trees where the user is owner or member.
+   * Returns minimal metadata for tree selection/navigation.
+   */
+  listTreesForUser(userId: string): Promise<Array<{
+    treeId: string;
+    ownerId: string;
+    members: Array<{ userId: string; role: 'OWNER' | 'EDITOR' | 'VIEWER' }>;
+    personCount: number;
+    createdAt: Date;
+    updatedAt: Date;
+  }>>;
 }

@@ -69,7 +69,7 @@ This is **not**:
 
 It is a **structural dump**, not a navigation query.
 
-**This guarantees:**
+This guarantees:
 - O(N + E) behavior
 - No stack depth risk
 - No ordering implications
@@ -88,11 +88,11 @@ No ordering is guaranteed for:
 - Output must be deterministic for the same stored snapshot.
 - Determinism does not imply meaningful order.
 
-**Acceptable examples:**
+Acceptable examples:
 - Insertion order
 - Internal map iteration order (if stable per snapshot)
 
-**Unacceptable:**
+Unacceptable:
 - Randomized order
 - Order dependent on runtime timing
 
@@ -108,7 +108,8 @@ No ordering is guaranteed for:
 - Represent explicitly recorded parent-child relationships only.
 - No inferred parents.
 - No transitive closure.
-- Each edge means: "ParentId is a recorded parent of ChildId."
+
+Each edge means: "ParentId is a recorded parent of ChildId."
 
 ### Spouse Edges
 - Represent explicit spouse relationships only.
@@ -128,7 +129,7 @@ The traversal must:
 - Never throw due to structural inconsistency
 - Never attempt to "repair" data
 
-**Examples:**
+Examples:
 - A parent reference to a missing person → edge omitted
 - Duplicate edges → duplicates may be returned
 - Cycles (should be impossible) → returned as-is
@@ -152,7 +153,7 @@ Authorization is evaluated before traversal.
 - Partial redaction of nodes or edges for presentation reasons.
 - Silent omission of "sensitive" persons.
 
-**If future privacy rules are needed, they must:**
+If future privacy rules are needed, they must:
 - Be explicit
 - Trigger a contract version bump
 

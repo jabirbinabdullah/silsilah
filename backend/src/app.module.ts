@@ -3,6 +3,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { MongoClient } from 'mongodb';
 import { GenealogyController } from './presentation/controllers/genealogy.controller';
 import { AuthController } from './presentation/controllers/auth.controller';
+import { PublicController } from './presentation/controllers/public.controller';
 import { GenealogyApplicationService } from './application/services/genealogy-application.service';
 import { MongoGenealogyGraphRepository } from './infrastructure/repositories/genealogy-graph.mongo.repository';
 import { MongoUserRepository } from './infrastructure/repositories/user.mongo.repository';
@@ -136,6 +137,6 @@ const appServiceProvider = {
       inject: [AuthService],
     },
   ],
-  controllers: [GenealogyController, AuthController],
+  controllers: [GenealogyController, AuthController, PublicController],
 })
 export class AppModule {}

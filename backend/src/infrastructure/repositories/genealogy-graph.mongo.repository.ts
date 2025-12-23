@@ -170,4 +170,40 @@ export class MongoGenealogyGraphRepository implements GenealogyGraphRepository {
     }
     return doc;
   }
+
+  async listTreesForUser(userId: string): Promise<Array<{
+    treeId: string;
+    ownerId: string;
+    members: Array<{ userId: string; role: 'OWNER' | 'EDITOR' | 'VIEWER' }>;
+    personCount: number;
+    createdAt: Date;
+    updatedAt: Date;
+  }>> {
+    // Find trees where user is owner OR member
+    const docs = await this.collection
+      .find({
+        $or: [
+          { ownerId: userId },
+          { 'members.userId': userId },
+        ],
+      })
+      .project({
+        treeId: 1,
+        ownerId: 1,
+        members: 1,
+        persons: 1, // Need to count
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .toArray();
+
+    return docs.map(doc => ({
+      treeId: doc.treeId,
+      ownerId: doc.ownerId,
+      members: doc.members || [],
+      personCount: doc.persons?.length || 0,
+      createdAt: doc.createdAt,
+      updatedAt: doc.updatedAt,
+    }));
+  }
 }

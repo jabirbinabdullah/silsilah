@@ -4,6 +4,7 @@ import {
   OwnershipError,
   MembershipError,
   NotFoundError,
+  InvariantViolationError,
 } from '../../domain/errors';
 import type { AuditLogRepository, GenealogyGraphRepository } from '../../infrastructure/repositories';
 import { CreateFamilyTreeHandler, type CreateFamilyTreeCommand } from '../commands/create-family-tree.command';
@@ -12,10 +13,14 @@ import { EstablishParentChildHandler, type EstablishParentChildCommand } from '.
 import { EstablishSpouseHandler, type EstablishSpouseCommand } from '../commands/establish-spouse.command';
 import { RemoveRelationshipHandler, type RemoveRelationshipCommand } from '../commands/remove-relationship.command';
 import { RemovePersonHandler, type RemovePersonCommand } from '../commands/remove-person.command';
+import { ImportPersonsHandler } from '../commands/import-persons.handler';
+import { type ImportPersonsCommand, type ImportPersonsResult } from '../commands/import-persons.command';
 import { GetPersonHandler, type GetPersonQuery } from '../queries/get-person.query';
 import { GetAncestorsHandler, type GetAncestorsQuery } from '../queries/get-ancestors.query';
 import { GetDescendantsHandler, type GetDescendantsQuery } from '../queries/get-descendants.query';
 import { RenderGenealogyTreeHandler, type RenderGenealogyTreeQuery } from '../queries/render-genealogy-tree.query';
+import type { TreeRenderDTO } from '../dtos/tree-render.dto';
+import type { TreeListItemDTO, TreeListResponseDTO } from '../dtos/tree-list.dto';
 
 export class GenealogyApplicationService {
   private readonly createFamilyTree: CreateFamilyTreeHandler;
@@ -24,6 +29,7 @@ export class GenealogyApplicationService {
   private readonly establishSpouse: EstablishSpouseHandler;
   private readonly removeRelationship: RemoveRelationshipHandler;
   private readonly removePerson: RemovePersonHandler;
+  private readonly importPersons: ImportPersonsHandler;
   private readonly getPerson: GetPersonHandler;
   private readonly getAncestors: GetAncestorsHandler;
   private readonly getDescendants: GetDescendantsHandler;
@@ -50,6 +56,7 @@ export class GenealogyApplicationService {
     this.establishSpouse = new EstablishSpouseHandler(repository);
     this.removeRelationship = new RemoveRelationshipHandler(repository);
     this.removePerson = new RemovePersonHandler(repository);
+    this.importPersons = new ImportPersonsHandler(repository);
     this.getPerson = new GetPersonHandler(this.readRepository);
     this.getAncestors = new GetAncestorsHandler(this.readRepository);
     this.getDescendants = new GetDescendantsHandler(this.readRepository);
@@ -184,6 +191,13 @@ export class GenealogyApplicationService {
     return result;
   }
 
+  async handleImportPersons(cmd: ImportPersonsCommand): Promise<ImportPersonsResult> {
+    this.requireMutation(); // EDITOR or OWNER
+    const result = await this.importPersons.execute(cmd);
+    await this.appendAudit('IMPORT_PERSONS', cmd.treeId);
+    return result;
+  }
+
   // Queries (allowed for VIEWER, EDITOR, OWNER)
   async handleGetPerson(query: GetPersonQuery) {
     this.requireQuery();
@@ -203,6 +217,116 @@ export class GenealogyApplicationService {
   async handleRenderTree(query: RenderGenealogyTreeQuery) {
     this.requireQuery();
     return this.renderTree.execute(query);
+  }
+
+  /**
+   * Get tree render data for frontend visualization.
+   * Returns a best-effort snapshot with defensive traversal.
+   * - Skips dangling references (missing person nodes)
+   * - Does NOT deduplicate edges
+   * - O(N+E) complexity with Set-based membership checks
+   * - Respects authorization boundary (requires VIEWER, EDITOR, or OWNER)
+   */
+  async getTreeRenderData(treeId: string): Promise<TreeRenderDTO> {
+    this.requireQuery();
+
+    // Phase 1: Validate input
+    if (!treeId || typeof treeId !== 'string' || treeId.trim() === '') {
+      throw new InvariantViolationError('treeId must be a non-empty string');
+    }
+
+    // Phase 2: Fetch snapshot using existing method
+    const snapshot = await (this.readRepository as any).getSnapshot(treeId);
+    if (!snapshot) {
+      throw new NotFoundError(`Tree ${treeId} not found`);
+    }
+
+    const persons = Array.isArray(snapshot.persons) ? snapshot.persons : [];
+    const spouseEdgesRaw = Array.isArray(snapshot.spouseEdges) ? snapshot.spouseEdges : [];
+    const parentChildEdgesRaw = Array.isArray(snapshot.parentChildEdges) ? snapshot.parentChildEdges : [];
+
+    // Phase 3: Build Set of valid node IDs (O(N))
+    const nodes: Array<{ id: string; displayName: string }> = [];
+    const validNodeIds = new Set<string>();
+    for (const p of persons) {
+      const id = (p as any).personId ?? (p as any).id;
+      if (!id) continue;
+      validNodeIds.add(id);
+      nodes.push({
+        id,
+        displayName: (p as any).name ?? (p as any).label ?? '', // Explicit mapping
+      });
+    }
+
+    // Phase 4: Collect spouse edges, skip edges with dangling references
+    const spouseEdges: Array<{ personAId: string; personBId: string }> = [];
+    for (const edge of spouseEdgesRaw) {
+      const a = (edge as any).personAId ?? (edge as any).spouse1Id ?? (edge as any).spouseAId;
+      const b = (edge as any).personBId ?? (edge as any).spouse2Id ?? (edge as any).spouseBId;
+      if (!a || !b) continue;
+      if (!validNodeIds.has(a) || !validNodeIds.has(b)) continue;
+      spouseEdges.push({ personAId: a, personBId: b });
+    }
+
+    // Phase 5: Collect parent-child edges, skip edges with dangling references
+    const parentChildEdges: Array<{ personAId: string; personBId: string }> = [];
+    for (const edge of parentChildEdgesRaw) {
+      const parentId = (edge as any).parentId ?? (edge as any).personAId;
+      const childId = (edge as any).childId ?? (edge as any).personBId;
+      if (!parentId || !childId) continue;
+      if (!validNodeIds.has(parentId) || !validNodeIds.has(childId)) continue;
+      parentChildEdges.push({ personAId: parentId, personBId: childId });
+    }
+
+    // Phase 6: Return versioned DTO
+    return {
+      version: 'v1' as const,
+      treeId: snapshot.treeId,
+      nodes,
+      spouseEdges,
+      parentChildEdges,
+    };
+  }
+
+  /**
+   * List all trees accessible by the current user.
+   * Returns trees where user is owner or member.
+   * Requires authentication (any valid user).
+   */
+  async listTrees(): Promise<TreeListResponseDTO> {
+    if (!this.userContext) {
+      throw new AuthorizationError('User context required to list trees');
+    }
+
+    const userId = this.userContext.userId;
+    const treesData = await this.readRepository.listTreesForUser(userId);
+
+    const trees: TreeListItemDTO[] = treesData.map(tree => {
+      // Determine user's role
+      let role: 'OWNER' | 'EDITOR' | 'VIEWER' = 'VIEWER';
+      if (tree.ownerId === userId) {
+        role = 'OWNER';
+      } else {
+        const membership = tree.members.find(m => m.userId === userId);
+        if (membership) {
+          role = membership.role;
+        }
+      }
+
+      return {
+        treeId: tree.treeId,
+        name: tree.treeId, // TODO: Add optional tree name field to domain
+        role,
+        personCount: tree.personCount,
+        createdAt: tree.createdAt,
+        updatedAt: tree.updatedAt,
+      };
+    });
+
+    return {
+      trees,
+      total: trees.length,
+    };
   }
 
   async exportTreeSnapshot(treeId: string) {

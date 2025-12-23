@@ -15,6 +15,7 @@ import {
 import { Request } from 'express';
 import { GenealogyApplicationService } from '../../application/services/genealogy-application.service';
 import type { UserContext } from '../../domain/types';
+import { PublicRead } from '../../infrastructure/guards/read.guards';
 import {
   CreateFamilyTreeDto,
   CreatePersonDto,
@@ -62,6 +63,22 @@ export class GenealogyController {
     }
     
     return userContext;
+  }
+
+  /**
+   * GET /trees
+   * List all trees accessible by the current user
+   */
+  @Get()
+  async listTrees(@Req() req: Request) {
+    try {
+      const userContext = this.getUserContext(req);
+      this.appService.setUserContext(userContext);
+
+      return await this.appService.listTrees();
+    } catch (err) {
+      this.handleDomainError(err);
+    }
   }
 
   /**
@@ -114,6 +131,36 @@ export class GenealogyController {
       });
       return {
         message: `Person '${dto.personId}' added to tree '${treeId}'`,
+      };
+    } catch (err) {
+      this.handleDomainError(err);
+    }
+  }
+
+  /**
+   * POST /trees/:id/persons/import
+   * Bulk import persons from CSV
+   */
+  @Post(':treeId/persons/import')
+  async importPersons(
+    @Param('treeId') treeId: string,
+    @Body() dto: { csvContent: string },
+    @Req() req: Request,
+  ): Promise<any> {
+    try {
+      const userContext = this.getUserContext(req);
+      this.appService.setUserContext(userContext);
+
+      const result = await this.appService.handleImportPersons({
+        treeId,
+        csvContent: dto.csvContent,
+      });
+
+      return {
+        imported: result.imported,
+        skipped: result.skipped,
+        total: result.total,
+        errors: result.errors,
       };
     } catch (err) {
       this.handleDomainError(err);
@@ -333,6 +380,27 @@ export class GenealogyController {
       }
 
       return result as RenderTreeResponseDto;
+    } catch (err) {
+      this.handleDomainError(err);
+    }
+  }
+
+  /**
+   * GET /trees/:id/render-data
+   * Get tree render data for frontend visualization.
+   * Returns a versioned DTO with all nodes and edges for client-side rendering.
+   * Respects authorization boundary (VIEWER, EDITOR, or OWNER).
+   */
+  @Get(':treeId/render-data')
+  async getTreeRenderData(
+    @Param('treeId') treeId: string,
+    @Req() req: Request,
+  ) {
+    try {
+      const userContext = this.getUserContext(req);
+      this.appService.setUserContext(userContext);
+
+      return await this.appService.getTreeRenderData(treeId);
     } catch (err) {
       this.handleDomainError(err);
     }
