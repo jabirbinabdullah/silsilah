@@ -60,3 +60,45 @@ export class PersonHasRelationshipsError extends InvariantViolationError {
     this.name = 'PersonHasRelationshipsError';
   }
 }
+
+export class AuthorizationError extends DomainError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AuthorizationError';
+  }
+}
+
+export class OwnershipError extends DomainError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'OwnershipError';
+  }
+}
+
+export class MembershipError extends DomainError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'MembershipError';
+  }
+}
+
+export class InvalidCredentialsError extends DomainError {
+  constructor(message: string = 'Invalid username or password') {
+    super(message);
+    this.name = 'InvalidCredentialsError';
+  }
+}
+
+export class TokenInvalidError extends DomainError {
+  constructor(message: string = 'Invalid or malformed token') {
+    super(message);
+    this.name = 'TokenInvalidError';
+  }
+}
+
+export class TokenExpiredError extends DomainError {
+  constructor(message: string = 'Token has expired') {
+    super(message);
+    this.name = 'TokenExpiredError';
+  }
+}

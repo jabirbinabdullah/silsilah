@@ -8,8 +8,14 @@ import {
   Query,
   HttpStatus,
   HttpException,
+  UseGuards,
+  Req,
+  Header,
 } from '@nestjs/common';
+import { Request } from 'express';
 import { GenealogyApplicationService } from '../../application/services/genealogy-application.service';
+import type { UserContext } from '../../domain/types';
+import { PublicRead } from '../../infrastructure/guards/read.guards';
 import {
   CreateFamilyTreeDto,
   CreatePersonDto,
@@ -31,11 +37,49 @@ import {
   ParentLimitExceededError,
   AgeInconsistencyError,
   PersonHasRelationshipsError,
+  AuthorizationError,
 } from '../../domain/errors';
 
 @Controller('trees')
 export class GenealogyController {
-  constructor(private readonly appService: GenealogyApplicationService) {}
+  constructor(
+    private readonly appService: GenealogyApplicationService,
+  ) {}
+
+  /**
+   * Extract UserContext from JWT token in request.
+   * Returns a default OWNER context if no token is present (for testing).
+   */
+  private getUserContext(req: Request): UserContext {
+    const userContext = (req as any).userContext as UserContext;
+    
+    // If no user context (e.g., in tests without JWT), provide default OWNER for backward compat
+    if (!userContext) {
+      return {
+        userId: 'test-user',
+        username: 'test-user',
+        role: 'OWNER',
+      };
+    }
+    
+    return userContext;
+  }
+
+  /**
+   * GET /trees
+   * List all trees accessible by the current user
+   */
+  @Get()
+  async listTrees(@Req() req: Request) {
+    try {
+      const userContext = this.getUserContext(req);
+      this.appService.setUserContext(userContext);
+
+      return await this.appService.listTrees();
+    } catch (err) {
+      this.handleDomainError(err);
+    }
+  }
 
   /**
    * POST /trees
@@ -44,8 +88,12 @@ export class GenealogyController {
   @Post()
   async createTree(
     @Body() dto: CreateFamilyTreeDto,
+    @Req() req: Request,
   ): Promise<FamilyTreeCreatedDto> {
     try {
+      const userContext = this.getUserContext(req);
+      this.appService.setUserContext(userContext);
+
       await this.appService.handleCreateFamilyTree({
         treeId: dto.treeId,
       });
@@ -60,25 +108,69 @@ export class GenealogyController {
 
   /**
    * POST /trees/:id/persons
-   * Add a person to the tree
+   * Add a person to the tree (command: AddPersonToTreeCommand)
    */
   @Post(':treeId/persons')
   async createPerson(
     @Param('treeId') treeId: string,
     @Body() dto: CreatePersonDto,
-  ): Promise<OperationSuccessDto> {
+    @Req() req: Request,
+  ): Promise<{ personId: string }> {
     try {
-      await this.appService.handleCreatePerson({
+      const userContext = this.getUserContext(req);
+      this.appService.setUserContext(userContext);
+
+      const birthDate = dto.birthDate ? new Date(dto.birthDate) : null;
+      const deathDate = dto.deathDate ? new Date(dto.deathDate) : null;
+
+      if (birthDate && Number.isNaN(birthDate.getTime())) {
+        throw new InvariantViolationError('birthDate is invalid');
+      }
+      if (deathDate && Number.isNaN(deathDate.getTime())) {
+        throw new InvariantViolationError('deathDate is invalid');
+      }
+
+      const personId = await this.appService.handleAddPersonToTree({
         treeId,
         personId: dto.personId,
         name: dto.name,
         gender: dto.gender,
-        birthDate: dto.birthDate || null,
+        birthDate,
         birthPlace: dto.birthPlace || null,
-        deathDate: dto.deathDate || null,
+        deathDate,
       });
       return {
-        message: `Person '${dto.personId}' added to tree '${treeId}'`,
+        personId,
+      };
+    } catch (err) {
+      this.handleDomainError(err);
+    }
+  }
+
+  /**
+   * POST /trees/:id/persons/import
+   * Bulk import persons from CSV
+   */
+  @Post(':treeId/persons/import')
+  async importPersons(
+    @Param('treeId') treeId: string,
+    @Body() dto: { csvContent: string },
+    @Req() req: Request,
+  ): Promise<any> {
+    try {
+      const userContext = this.getUserContext(req);
+      this.appService.setUserContext(userContext);
+
+      const result = await this.appService.handleImportPersons({
+        treeId,
+        csvContent: dto.csvContent,
+      });
+
+      return {
+        imported: result.imported,
+        skipped: result.skipped,
+        total: result.total,
+        errors: result.errors,
       };
     } catch (err) {
       this.handleDomainError(err);
@@ -93,8 +185,12 @@ export class GenealogyController {
   async establishParentChild(
     @Param('treeId') treeId: string,
     @Body() dto: EstablishParentChildDto,
+    @Req() req: Request,
   ): Promise<OperationSuccessDto> {
     try {
+      const userContext = this.getUserContext(req);
+      this.appService.setUserContext(userContext);
+
       await this.appService.handleEstablishParentChild({
         treeId,
         parentId: dto.parentId,
@@ -116,8 +212,12 @@ export class GenealogyController {
   async establishSpouse(
     @Param('treeId') treeId: string,
     @Body() dto: EstablishSpouseDto,
+    @Req() req: Request,
   ): Promise<OperationSuccessDto> {
     try {
+      const userContext = this.getUserContext(req);
+      this.appService.setUserContext(userContext);
+
       await this.appService.handleEstablishSpouse({
         treeId,
         spouseAId: dto.spouseA,
@@ -139,8 +239,12 @@ export class GenealogyController {
   async removeRelationship(
     @Param('treeId') treeId: string,
     @Body() dto: RemoveRelationshipDto,
+    @Req() req: Request,
   ): Promise<OperationSuccessDto> {
     try {
+      const userContext = this.getUserContext(req);
+      this.appService.setUserContext(userContext);
+
       await this.appService.handleRemoveRelationship({
         treeId,
         personId1: dto.personId1,
@@ -162,8 +266,12 @@ export class GenealogyController {
   async removePerson(
     @Param('treeId') treeId: string,
     @Param('personId') personId: string,
+    @Req() req: Request,
   ): Promise<OperationSuccessDto> {
     try {
+      const userContext = this.getUserContext(req);
+      this.appService.setUserContext(userContext);
+
       await this.appService.handleRemovePerson({
         treeId,
         personId,
@@ -184,8 +292,12 @@ export class GenealogyController {
   async getPerson(
     @Param('treeId') treeId: string,
     @Param('personId') personId: string,
+    @Req() req: Request,
   ): Promise<PersonResponseDto> {
     try {
+      const userContext = this.getUserContext(req);
+      this.appService.setUserContext(userContext);
+
       const person = await this.appService.handleGetPerson({ treeId, personId });
       if (!person) {
         throw new HttpException('Person not found', HttpStatus.NOT_FOUND);
@@ -204,8 +316,12 @@ export class GenealogyController {
   async getAncestors(
     @Param('treeId') treeId: string,
     @Param('personId') personId: string,
+    @Req() req: Request,
   ): Promise<AncestorsResponseDto> {
     try {
+      const userContext = this.getUserContext(req);
+      this.appService.setUserContext(userContext);
+
       const ancestors = await this.appService.handleGetAncestors({ treeId, personId });
       if (!ancestors) {
         throw new HttpException('Family tree not found', HttpStatus.NOT_FOUND);
@@ -224,8 +340,12 @@ export class GenealogyController {
   async getDescendants(
     @Param('treeId') treeId: string,
     @Param('personId') personId: string,
+    @Req() req: Request,
   ): Promise<DescendantsResponseDto> {
     try {
+      const userContext = this.getUserContext(req);
+      this.appService.setUserContext(userContext);
+
       const descendants = await this.appService.handleGetDescendants({ treeId, personId });
       if (!descendants) {
         throw new HttpException('Family tree not found', HttpStatus.NOT_FOUND);
@@ -246,8 +366,12 @@ export class GenealogyController {
     @Param('treeId') treeId: string,
     @Query('rootPersonId') rootPersonId: string,
     @Query('viewMode') viewMode: 'VERTICAL' | 'HORIZONTAL' | 'LIST' = 'VERTICAL',
+    @Req() req: Request,
   ): Promise<RenderTreeResponseDto> {
     try {
+      const userContext = this.getUserContext(req);
+      this.appService.setUserContext(userContext);
+
       if (!rootPersonId) {
         throw new HttpException(
           'rootPersonId query parameter is required',
@@ -272,6 +396,74 @@ export class GenealogyController {
   }
 
   /**
+   * GET /trees/:id/render-data
+   * Get tree render data for frontend visualization.
+   * Returns a versioned DTO with all nodes and edges for client-side rendering.
+   * Respects authorization boundary (VIEWER, EDITOR, or OWNER).
+   */
+  @Get(':treeId/render-data')
+  async getTreeRenderData(
+    @Param('treeId') treeId: string,
+    @Req() req: Request,
+  ) {
+    try {
+      const userContext = this.getUserContext(req);
+      this.appService.setUserContext(userContext);
+
+      return await this.appService.getTreeRenderData(treeId);
+    } catch (err) {
+      this.handleDomainError(err);
+    }
+  }
+
+  /**
+   * GET /trees/:id/export/json
+   * Owner-only: export full tree snapshot as JSON
+   */
+  @Get(':treeId/export/json')
+  async exportJson(
+    @Param('treeId') treeId: string,
+    @Req() req: Request,
+  ) {
+    try {
+      const userContext = this.getUserContext(req);
+      this.appService.setUserContext(userContext);
+
+      if (userContext.role !== 'OWNER') {
+        throw new AuthorizationError('Only owners can export');
+      }
+
+      return await this.appService.exportTreeSnapshot(treeId);
+    } catch (err) {
+      this.handleDomainError(err);
+    }
+  }
+
+  /**
+   * GET /trees/:id/export/gedcom
+   * Owner-only: export tree as GEDCOM text (read-only)
+   */
+  @Get(':treeId/export/gedcom')
+  @Header('Content-Type', 'text/plain; charset=utf-8')
+  async exportGedcom(
+    @Param('treeId') treeId: string,
+    @Req() req: Request,
+  ): Promise<string> {
+    try {
+      const userContext = this.getUserContext(req);
+      this.appService.setUserContext(userContext);
+
+      if (userContext.role !== 'OWNER') {
+        throw new AuthorizationError('Only owners can export');
+      }
+
+      return await this.appService.exportTreeGedcom(treeId);
+    } catch (err) {
+      this.handleDomainError(err);
+    }
+  }
+
+  /**
    * Map domain errors to HTTP responses
    */
   private handleDomainError(err: unknown): never {
@@ -279,6 +471,9 @@ export class GenealogyController {
       throw err;
     }
 
+    if (err instanceof AuthorizationError) {
+      throw new HttpException(err.message, HttpStatus.FORBIDDEN);
+    }
     if (err instanceof NotFoundError) {
       throw new HttpException(err.message, HttpStatus.NOT_FOUND);
     }

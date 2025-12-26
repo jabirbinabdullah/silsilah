@@ -56,8 +56,47 @@ export interface GenealogyGraphFactory {
   create(treeId: string): GenealogyGraph;
 }
 
+export type UserRole = 'OWNER' | 'EDITOR' | 'VIEWER';
+
 export interface UserAccount {
   id: string;
   username: string;
-  role: 'ADMIN' | 'EDITOR' | 'PUBLIC';
+  role: UserRole;
+}
+
+export interface UserContext {
+  userId: string;
+  username: string;
+  role: UserRole;
+}
+
+export interface TreeOwnership {
+  treeId: string;
+  ownerId: string;
+  editors: string[];
+}
+
+export interface Member {
+  userId: string;
+  role: UserRole;
+}
+
+export interface FamilyTreeSnapshot {
+  treeId: string;
+  ownerId: string;
+  members: Member[];
+}
+
+export interface User {
+  id: string;
+  username: string;
+  email?: string | null;
+  passwordHash: string;
+  role: UserRole;
+  createdAt: Date;
+}
+
+export interface UserCredentials {
+  username: string;
+  password: string;
 }
