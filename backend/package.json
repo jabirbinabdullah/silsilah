@@ -10,6 +10,7 @@
     "test:smoke": "ts-node smoke-test.ts",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed:user": "ts-node scripts/seed-user.ts",
+    "seed:tree": "ts-node scripts/seed-family-tree.ts",
     "prepare": "husky"
   },
   "dependencies": {

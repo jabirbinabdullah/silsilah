@@ -96,7 +96,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
         .expect(201)
         .expect((res) => {
           expect(res.body).toEqual({
-            message: expect.stringContaining("person-a"),
+            personId: 'person-a',
           });
         });
     });
@@ -111,7 +111,10 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
           birthDate: '1962-05-15',
           birthPlace: 'Boston',
         })
-        .expect(201);
+        .expect(201)
+        .expect((res) => {
+          expect(res.body).toEqual({ personId: 'person-b' });
+        });
     });
 
     it('should add person C', () => {
@@ -124,7 +127,10 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
           birthDate: '1985-03-20',
           birthPlace: 'Chicago',
         })
-        .expect(201);
+        .expect(201)
+        .expect((res) => {
+          expect(res.body).toEqual({ personId: 'person-c' });
+        });
     });
 
     it('should return 404 for nonexistent tree', () => {
@@ -136,6 +142,19 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
           gender: 'UNKNOWN',
         })
         .expect(404);
+    });
+
+    it('should reject deathDate before birthDate (invariant)', () => {
+      return request(app.getHttpServer())
+        .post(`/trees/${treeId}/persons`)
+        .send({
+          personId: 'person-invalid',
+          name: 'Invalid',
+          gender: 'UNKNOWN',
+          birthDate: '2020-01-01',
+          deathDate: '2010-01-01',
+        })
+        .expect(400);
     });
   });
 

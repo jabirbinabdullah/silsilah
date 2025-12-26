@@ -108,29 +108,39 @@ export class GenealogyController {
 
   /**
    * POST /trees/:id/persons
-   * Add a person to the tree
+   * Add a person to the tree (command: AddPersonToTreeCommand)
    */
   @Post(':treeId/persons')
   async createPerson(
     @Param('treeId') treeId: string,
     @Body() dto: CreatePersonDto,
     @Req() req: Request,
-  ): Promise<OperationSuccessDto> {
+  ): Promise<{ personId: string }> {
     try {
       const userContext = this.getUserContext(req);
       this.appService.setUserContext(userContext);
 
-      await this.appService.handleCreatePerson({
+      const birthDate = dto.birthDate ? new Date(dto.birthDate) : null;
+      const deathDate = dto.deathDate ? new Date(dto.deathDate) : null;
+
+      if (birthDate && Number.isNaN(birthDate.getTime())) {
+        throw new InvariantViolationError('birthDate is invalid');
+      }
+      if (deathDate && Number.isNaN(deathDate.getTime())) {
+        throw new InvariantViolationError('deathDate is invalid');
+      }
+
+      const personId = await this.appService.handleAddPersonToTree({
         treeId,
         personId: dto.personId,
         name: dto.name,
         gender: dto.gender,
-        birthDate: dto.birthDate || null,
+        birthDate,
         birthPlace: dto.birthPlace || null,
-        deathDate: dto.deathDate || null,
+        deathDate,
       });
       return {
-        message: `Person '${dto.personId}' added to tree '${treeId}'`,
+        personId,
       };
     } catch (err) {
       this.handleDomainError(err);

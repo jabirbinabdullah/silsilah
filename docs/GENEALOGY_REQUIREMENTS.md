@@ -1,3 +1,42 @@
+### Frontend Styling Convention
+
+- Drawers and forms: Tailwind CSS utilities
+- Layout, lists, and legacy UI: Bootstrap 5 components
+- Avoid mixing Tailwind and Bootstrap within a single component. Choose one per component for consistent spacing, typography, and z-index behavior.
+
+Build order: Tailwind stylesheet is loaded first and Bootstrap last (see `frontend/src/main.tsx`). This reduces CSS collisions by letting Bootstrap’s Reboot and variables apply predictably while keeping Tailwind utilities available.
+
+### Add Parent–Child UX (Design)
+
+- Entry points:
+   - From Tree Viewer toolbar: a button “Add Relationship → Parent–Child”.
+   - From a person’s details drawer: a contextual “Add Parent” or “Add Child” button pre-filling one side.
+- UI container: Tailwind drawer (consistent with add-person). Keep it focused: two inputs and validation.
+- Selection model:
+   - Use the currently loaded `render-data` node list for typeahead search by name and ID.
+   - Disallow identical selections (parentId !== childId).
+- Validation rules (frontend):
+   - Both fields required; prevent duplicate submission; show inline errors.
+   - Leave graph constraints (cycles, parent limit, age) to backend; surface its message verbatim.
+- Submit flow:
+   - Call `POST /trees/:treeId/relationships/parent-child` with `{ parentId, childId }`.
+   - On success, refresh render-data and keep the child selected to show new parent edge.
+- Error handling:
+   - 409/422 mapped to human text: duplicate, cycle detected, or parent limit exceeded.
+   - Show raw message string returned by backend beneath the form.
+
+### Command Mapping (Frontend ⇄ Backend)
+
+- Establish Parent–Child
+   - Frontend: `establishParentChild(treeId, { parentId, childId })` (see `frontend/src/api.ts`).
+   - Backend: `POST /trees/:treeId/relationships/parent-child` handled by `GenealogyController.establishParentChild`.
+
+### Component System Boundaries
+
+- Drawers/forms: Tailwind only
+- Layout/navigation/lists: Bootstrap only
+- Do not mix within a component. Prefer composition of Tailwind child inside a Bootstrap layout shell.
+
 SOFTWARE REQUIREMENTS SPECIFICATION
 
 Project: Web-Based Genealogy Information System

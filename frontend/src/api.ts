@@ -21,6 +21,15 @@ export type PersonDetails = {
   deathDate?: Date | null;
 };
 
+export type CreatePersonPayload = {
+  personId: string;
+  name: string;
+  gender: 'MALE' | 'FEMALE' | 'UNKNOWN';
+  birthDate?: string | null;
+  birthPlace?: string | null;
+  deathDate?: string | null;
+};
+
 export type RenderNode = { id: string; displayName: string };
 export type RenderEdgeData = { id: string; source: string; target: string; type: 'spouse' | 'parent-child' };
 export type TreeRenderV1 = {
@@ -70,6 +79,49 @@ export async function getPublicRenderData(treeId: string): Promise<TreeRenderV1>
     const text = await res.text().catch(() => '');
     throw new Error(`Failed to fetch render data: ${res.status} ${text}`);
   }
+  return res.json();
+}
+
+export async function createPerson(treeId: string, payload: CreatePersonPayload): Promise<{ personId: string }> {
+  const base = getBaseUrl();
+  const token = getAuthToken();
+  const res = await fetch(`${base}/trees/${encodeURIComponent(treeId)}/persons`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to create person: ${res.status} ${text}`);
+  }
+
+  return res.json();
+}
+
+export async function establishParentChild(
+  treeId: string,
+  payload: { parentId: string; childId: string }
+): Promise<{ message: string }> {
+  const base = getBaseUrl();
+  const token = getAuthToken();
+  const res = await fetch(`${base}/trees/${encodeURIComponent(treeId)}/relationships/parent-child`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to establish parent-child: ${res.status} ${text}`);
+  }
+
   return res.json();
 }
 

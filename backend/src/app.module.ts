@@ -1,9 +1,10 @@
-import { Module } from '@nestjs/common';
+import { Inject, Module, OnModuleDestroy, Optional } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { MongoClient } from 'mongodb';
 import { GenealogyController } from './presentation/controllers/genealogy.controller';
 import { AuthController } from './presentation/controllers/auth.controller';
 import { PublicController } from './presentation/controllers/public.controller';
+import { HealthController } from './presentation/controllers/health.controller';
 import { GenealogyApplicationService } from './application/services/genealogy-application.service';
 import { MongoGenealogyGraphRepository } from './infrastructure/repositories/genealogy-graph.mongo.repository';
 import { MongoUserRepository } from './infrastructure/repositories/user.mongo.repository';
@@ -27,10 +28,19 @@ const mongoClientProvider = {
       maxPoolSize: Number(process.env.MONGODB_MAX_POOL_SIZE || 20),
       minPoolSize: Number(process.env.MONGODB_MIN_POOL_SIZE || 0),
     };
+    console.log('[MONGO] Connecting to:', uri);
     const client = new MongoClient(uri, options);
-    await client.connect();
-    return client;
+    try {
+      await client.connect();
+      console.log('[MONGO] Connected successfully');
+      return client;
+    } catch (err) {
+      console.error('[MONGO] Connection failed:', err);
+      throw err;
+    }
   },
+  inject: [],
+  durable: true,
 };
 
 // Optional read-only MongoDB client (used for read paths if provided)
@@ -49,6 +59,7 @@ const readonlyMongoClientProvider = {
     await client.connect();
     return client;
   },
+  durable: true,
 };
 
 // Genealogy Repository provider
@@ -137,6 +148,6 @@ const appServiceProvider = {
       inject: [AuthService],
     },
   ],
-  controllers: [GenealogyController, AuthController, PublicController],
+  controllers: [GenealogyController, AuthController, PublicController, HealthController],
 })
 export class AppModule {}

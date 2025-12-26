@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getTrees, setApiConfig, type TreeListItem } from '../api';
 
-function InputRow({
+function SettingsInput({
   label,
   value,
   onChange,
@@ -14,15 +14,19 @@ function InputRow({
   placeholder?: string;
 }) {
   return (
-    <label className="flex gap-3 items-center">
-      <span className="w-32 text-gray-700 text-sm font-medium">{label}</span>
-      <input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
-    </label>
+    <div className="row align-items-center mb-3">
+      <div className="col-sm-3">
+        <label className="form-label mb-0">{label}</label>
+      </div>
+      <div className="col-sm-9">
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="form-control"
+        />
+      </div>
+    </div>
   );
 }
 
@@ -31,9 +35,11 @@ export function TreeList() {
     () => localStorage.getItem('apiBaseUrl') || 'http://localhost:3000'
   );
   const [authToken, setAuthToken] = useState<string>(() => localStorage.getItem('authToken') || '');
+  const [directTreeId, setDirectTreeId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [trees, setTrees] = useState<TreeListItem[]>([]);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const canFetch = useMemo(() => !!apiBaseUrl, [apiBaseUrl]);
 
@@ -48,6 +54,8 @@ export function TreeList() {
     setLoading(true);
     try {
       setApiConfig(apiBaseUrl, authToken);
+      localStorage.setItem('apiBaseUrl', apiBaseUrl);
+      localStorage.setItem('authToken', authToken);
       const data = await getTrees();
       setTrees(data.trees || []);
     } catch (e: any) {
@@ -57,56 +65,139 @@ export function TreeList() {
     }
   }
 
-  return (
-    <div className="max-w-3xl mx-auto p-6 space-y-6">
-      <h2 className="text-3xl font-bold text-gray-900">Your Trees</h2>
+  const normalizedDirectTreeId = useMemo(() => {
+    const trimmed = directTreeId.trim();
+    if (!trimmed) return '';
+    try {
+      const u = new URL(trimmed);
+      const parts = u.pathname.split('/').filter(Boolean);
+      const idx = parts.findIndex((p) => p === 'trees');
+      if (idx !== -1 && parts[idx + 1]) return decodeURIComponent(parts[idx + 1]);
+      return decodeURIComponent(parts[parts.length - 1]);
+    } catch {
+      const segments = trimmed.split('/').filter(Boolean);
+      return decodeURIComponent(segments[segments.length - 1]);
+    }
+  }, [directTreeId]);
 
-      {/* Settings Card */}
-      <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
-        <h3 className="text-lg font-semibold text-gray-900">Backend Settings</h3>
-        <InputRow label="API Base URL" value={apiBaseUrl} onChange={setApiBaseUrl} placeholder="http://localhost:3000" />
-        <InputRow label="Auth Token" value={authToken} onChange={setAuthToken} placeholder="(optional JWT)" />
-        <div className="pt-2">
-          <button
-            onClick={fetchTrees}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-          >
-            Load Trees
-          </button>
+  return (
+    <div className="container py-4">
+      <div className="p-5 mb-4 bg-light rounded-3 shadow-sm">
+        <div className="container-fluid py-3">
+          <h1 className="display-5 fw-bold">Dashboard</h1>
+          <p className="col-md-8 fs-4">
+            Welcome to Silsilah. Open an existing family tree or connect to your backend to load a
+            list of trees.
+          </p>
         </div>
-        {error && <div className="text-red-600 text-sm">{error}</div>}
       </div>
 
-      {/* Trees List */}
-      {loading ? (
-        <div className="text-gray-600">Loading trees…</div>
-      ) : trees.length === 0 ? (
-        <div className="text-gray-500">No trees found.</div>
-      ) : (
-        <div className="space-y-3">
-          {trees.map((t) => (
-            <div
-              key={t.treeId}
-              className="bg-white border border-gray-200 rounded-lg p-4 flex items-center justify-between hover:border-gray-300 transition-colors"
-            >
-              <div>
-                <h4 className="font-semibold text-gray-900">{t.name || t.treeId}</h4>
-                <p className="text-sm text-gray-600 mt-1">
-                  Role: <span className="font-medium">{t.role}</span> · Persons: <span className="font-medium">{t.personCount}</span>
-                </p>
-              </div>
-              <Link to={`/trees/${encodeURIComponent(t.treeId)}`}>
-                <button className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors">
-                  Open
-                </button>
-              </Link>
+      <div className="row">
+        <div className="col-lg-12">
+          <div className="card shadow-sm mb-4">
+            <div className="card-header">
+              <h5 className="card-title mb-0">Actions</h5>
             </div>
-          ))}
+            <div className="card-body">
+              <div className="mb-3">
+                <label htmlFor="treeIdInput" className="form-label">
+                  Open Tree by ID or URL
+                </label>
+                <div className="input-group">
+                  <input
+                    id="treeIdInput"
+                    value={directTreeId}
+                    onChange={(e) => setDirectTreeId(e.target.value)}
+                    placeholder="Enter a known Tree ID or paste a full URL"
+                    className="form-control"
+                  />
+                  <Link to={normalizedDirectTreeId ? `/trees/${normalizedDirectTreeId}` : '#'}>
+                    <button
+                      disabled={!normalizedDirectTreeId}
+                      className="btn btn-primary"
+                      type="button"
+                    >
+                      Open
+                    </button>
+                  </Link>
+                </div>
+              </div>
+              <hr />
+              <div className="mt-3">
+                <button
+                  className="btn btn-link text-decoration-none p-0"
+                  type="button"
+                  onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+                >
+                  <h6 className="mb-0">
+                    Backend Settings <small>(click to expand)</small>
+                  </h6>
+                </button>
+                <div className={`collapse mt-3 ${isSettingsOpen ? 'show' : ''}`} id="settings-collapse">
+                  <SettingsInput
+                    label="API Base URL"
+                    value={apiBaseUrl}
+                    onChange={setApiBaseUrl}
+                    placeholder="http://localhost:3000"
+                  />
+                  <SettingsInput
+                    label="Auth Token"
+                    value={authToken}
+                    onChange={setAuthToken}
+                    placeholder="(optional JWT)"
+                  />
+                  <button
+                    onClick={fetchTrees}
+                    disabled={loading || !canFetch}
+                    className="btn btn-secondary"
+                  >
+                    {loading ? 'Loading...' : 'Load Tree List'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <h4 className="mb-0">Available Trees</h4>
+        {error && <div className="alert alert-danger mb-0 py-2 px-3">{error}</div>}
+      </div>
+
+      {loading && <div className="text-center text-muted">Loading trees…</div>}
+
+      {!loading && trees.length === 0 && (
+        <div className="text-center py-5 bg-light rounded-3">
+          <h5 className="text-muted">No trees found.</h5>
+          <p className="text-muted">
+            Use the "Backend Settings" above to connect to your backend and load a list.
+          </p>
         </div>
       )}
 
-      <div className="text-sm text-gray-500 pt-4">
-        Note: Viewer uses public read-only endpoint. No authentication needed to view family trees.
+      <div className="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+        {trees.map((t) => (
+          <div key={t.treeId} className="col">
+            <div className="card h-100 shadow-sm hover-shadow">
+              <div className="card-body">
+                <h5 className="card-title">{t.name || t.treeId}</h5>
+                <p className="card-text text-muted">
+                  Contains {t.personCount} person(s). Your role is{' '}
+                  <span className="badge bg-secondary">{t.role}</span>.
+                </p>
+              </div>
+              <div className="card-footer bg-transparent border-0 pb-3">
+                <Link
+                  to={`/trees/${encodeURIComponent(t.treeId)}`}
+                  className="btn btn-primary w-100"
+                >
+                  Open Tree
+                </Link>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

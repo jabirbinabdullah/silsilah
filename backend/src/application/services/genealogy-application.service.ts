@@ -8,7 +8,7 @@ import {
 } from '../../domain/errors';
 import type { AuditLogRepository, GenealogyGraphRepository } from '../../infrastructure/repositories';
 import { CreateFamilyTreeHandler, type CreateFamilyTreeCommand } from '../commands/create-family-tree.command';
-import { CreatePersonHandler, type CreatePersonCommand } from '../commands/create-person.command';
+import { AddPersonToTreeHandler, type AddPersonToTreeCommand } from '../commands/add-person-to-tree.command';
 import { EstablishParentChildHandler, type EstablishParentChildCommand } from '../commands/establish-parent-child.command';
 import { EstablishSpouseHandler, type EstablishSpouseCommand } from '../commands/establish-spouse.command';
 import { RemoveRelationshipHandler, type RemoveRelationshipCommand } from '../commands/remove-relationship.command';
@@ -24,7 +24,7 @@ import type { TreeListItemDTO, TreeListResponseDTO } from '../dtos/tree-list.dto
 
 export class GenealogyApplicationService {
   private readonly createFamilyTree: CreateFamilyTreeHandler;
-  private readonly createPerson: CreatePersonHandler;
+  private readonly addPersonToTree: AddPersonToTreeHandler;
   private readonly establishParentChild: EstablishParentChildHandler;
   private readonly establishSpouse: EstablishSpouseHandler;
   private readonly removeRelationship: RemoveRelationshipHandler;
@@ -51,7 +51,7 @@ export class GenealogyApplicationService {
     this.readRepository = readRepository ?? repository;
     this.auditLogRepository = auditLogRepository;
     this.createFamilyTree = new CreateFamilyTreeHandler(repository, factory);
-    this.createPerson = new CreatePersonHandler(repository);
+    this.addPersonToTree = new AddPersonToTreeHandler(repository);
     this.establishParentChild = new EstablishParentChildHandler(repository);
     this.establishSpouse = new EstablishSpouseHandler(repository);
     this.removeRelationship = new RemoveRelationshipHandler(repository);
@@ -156,9 +156,9 @@ export class GenealogyApplicationService {
     return result;
   }
 
-  async handleCreatePerson(cmd: CreatePersonCommand) {
+  async handleAddPersonToTree(cmd: AddPersonToTreeCommand) {
     this.requireMutation();
-    const result = await this.createPerson.execute(cmd);
+    const result = await this.addPersonToTree.execute(cmd);
     await this.appendAudit('CREATE_PERSON', cmd.treeId);
     return result;
   }

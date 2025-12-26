@@ -9,78 +9,104 @@ type PersonRelationshipsProps = {
   parents: FamilyNode[];
   children: FamilyNode[];
   spouses: FamilyNode[];
-  selectedPersonId: string;
   onSelectPerson: (personId: string) => void;
 };
 
 type FamilySectionProps = {
   title: string;
   members: FamilyNode[];
-  selectedPersonId: string;
+  icon: React.ReactNode;
   onSelectPerson: (personId: string) => void;
 };
 
-const FamilySection: React.FC<FamilySectionProps> = ({ title, members, selectedPersonId, onSelectPerson }) => {
+const RelationshipSection: React.FC<FamilySectionProps> = ({ title, members, icon, onSelectPerson }) => {
   if (members.length === 0) return null;
 
   return (
-    <div className="mb-4">
-      <h3 className="text-xs font-semibold text-gray-600 uppercase mb-2">{title}</h3>
-      <ul className="space-y-1">
-        {members.map((member: FamilyNode) => (
-          <li key={member.personId}>
-            <button
-              onClick={() => onSelectPerson(member.personId)}
-              className={`text-sm w-full text-left px-2 py-1 rounded hover:bg-blue-100 transition-colors ${
-                member.personId === selectedPersonId
-                  ? 'bg-blue-200 text-blue-900 font-medium'
-                  : 'text-blue-600 hover:text-blue-700'
-              }`}
-            >
-              {member.displayName}
-            </button>
-          </li>
+    <div className="mb-3">
+      <h6 className="text-muted small d-flex align-items-center gap-2">
+        {icon}
+        {title}
+      </h6>
+      <div className="list-group list-group-flush">
+        {members.map((member) => (
+          <button
+            key={member.personId}
+            type="button"
+            onClick={() => onSelectPerson(member.personId)}
+            className="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+          >
+            {member.displayName}
+            <span className="text-muted">›</span>
+          </button>
         ))}
-      </ul>
+      </div>
     </div>
   );
 };
+
+const iconProps = {
+  width: '16',
+  height: '16',
+  className: 'text-secondary',
+};
+
+const SpousesIcon = () => (
+  <svg {...iconProps} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M4.7 19.3A8.5 8.5 0 0 1 12 4.8a8.5 8.5 0 0 1 7.3 14.5" />
+    <path d="M8 14A4 4 0 1 0 8 6a4 4 0 0 0 0 8Z" />
+    <path d="M16 14a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" />
+  </svg>
+);
+
+const ParentsIcon = () => (
+  <svg {...iconProps} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M14 9a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
+    <path d="M18 13a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
+    <path d="M6 13a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
+    <path d="m6 13 2-4" />
+    <path d="m18 13-2-4" />
+  </svg>
+);
+
+const ChildrenIcon = () => (
+  <svg {...iconProps} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M12 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
+    <path d="M12 18a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z" />
+    <path d="M12 14v-4" />
+  </svg>
+);
 
 export const PersonRelationships: React.FC<PersonRelationshipsProps> = ({
   parents,
   children,
   spouses,
-  selectedPersonId,
   onSelectPerson,
-}: PersonRelationshipsProps) => {
+}) => {
   const hasAnyRelationships = parents.length > 0 || children.length > 0 || spouses.length > 0;
 
   if (!hasAnyRelationships) {
-    return (
-      <div className="text-gray-500 text-sm italic">
-        No family members visible in tree
-      </div>
-    );
+    return <div className="text-muted text-center p-3 fst-italic">No direct family listed.</div>;
   }
 
   return (
     <div>
-      <FamilySection
+      <RelationshipSection
         title="Parents"
         members={parents}
-        selectedPersonId={selectedPersonId}
+        icon={<ParentsIcon />}
         onSelectPerson={onSelectPerson}
       />
-      <FamilySection
+      <RelationshipSection
         title="Spouses"
         members={spouses}
-        selectedPersonId={selectedPersonId}
+        icon={<SpousesIcon />}
         onSelectPerson={onSelectPerson}
       />
-      <FamilySection
+      <RelationshipSection
         title="Children"
         members={children}
-        selectedPersonId={selectedPersonId}
+        icon={<ChildrenIcon />}
         onSelectPerson={onSelectPerson}
       />
     </div>
