@@ -125,6 +125,51 @@ Rules
 * Textual/list-based view must be available
 * Visual tree is the primary presentation
 
+6.4 Frontend Implementation Status (Tree Viewer)
+
+- Node cards: name, optional birth/death year, photo placeholder; root bolded.
+- Connectors:
+   - Parent–child: solid lines.
+   - Spouse: dashed line with interlocked rings at midpoint.
+   - Adoption: dotted line.
+- Interactions:
+   - Click a node to set it as the new root and re-center the tree.
+   - Hover a node to highlight its ancestor path and show a tooltip.
+   - Zoom in/out/reset with toolbar controls; pan via drag.
+   - Search by name and auto-center the first match.
+- Layout & Responsiveness:
+   - Vertical and horizontal tree layouts with generation bands and labels.
+   - Responsive container with ResizeObserver; SVG uses viewBox scaling.
+- Export:
+   - Export current view to SVG and PNG (toolbar buttons).
+- Diagnostics:
+   - LOD badge indicates level-of-detail (LOW/MEDIUM/HIGH) based on zoom.
+   - Worker mode toggle: Auto (default), Force ON, Force OFF.
+
+6.5 Performance Optimizations (500+ Nodes)
+
+- Virtual rendering: culls off-screen nodes/links to reduce DOM load.
+- Level-of-detail (LOD):
+   - LOW (zoom < 0.5): minimal markers.
+   - MEDIUM (0.5–0.9): name-only nodes.
+   - HIGH (> 0.9): full cards with dates/toggle.
+- Debounced interactions for zoom, resize, and draw.
+- Web Worker layout: offloads D3 tree layout for large trees (auto ≥400 nodes).
+
+6.6 Toolbar Controls (User Guide)
+
+- View Mode: Network | ⬇ Tree | ➡ Tree.
+- Zoom: +, ⊙, −.
+- Search: live filter by display name; auto-center first match.
+- Export: SVG, PNG (tree views only).
+- Diagnostics: LOD badge and Worker mode dropdown.
+
+6.7 Known Limitations & Notes
+
+- Marriage indicators render only when both nodes are visible (virtual culling).
+- Adoption edges display when provided in render data (optional in backend).
+- Very large trees may benefit from initial worker mode = Force ON.
+
 7. Data Input & Editing
 7.1 Input Methods
 * Person creation form

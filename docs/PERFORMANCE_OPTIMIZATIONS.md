@@ -77,6 +77,38 @@ The diagnostic controls appear on the right side of the toolbar:
    - Load large tree, zoom into specific branch
    - Pan around → only visible nodes render (check browser DevTools elements)
 
+## Diagnostics Usage
+
+- **LOD Thresholds**:
+   - LOW when zoom scale k < 0.5
+   - MEDIUM when 0.5 ≤ k < 0.9
+   - HIGH when k ≥ 0.9
+- **Worker Mode**:
+   - Auto: worker activates at 400+ nodes
+   - Force ON: always use worker
+   - Force OFF: never use worker (debugging)
+
+## Quick Run Commands
+
+Frontend (Vite):
+
+```powershell
+Set-Location "C:\VSCProject\silsilah\frontend"
+npm run dev
+```
+
+Backend (NestJS):
+
+```powershell
+Set-Location "C:\VSCProject\silsilah\backend"
+npm start
+```
+
+## Notes
+
+- If Vite changes port (5173 → 5174), the dev overlay may show prompts; you can ignore the shortcut hints. Press `q` to quit the dev server.
+- Ensure the backend is running for `getPublicRenderData` to resolve successfully.
+
 ## Code Files Modified
 
 1. `frontend/src/components/GenealogyNodeRenderer.ts` - Added `detailLevel` option
