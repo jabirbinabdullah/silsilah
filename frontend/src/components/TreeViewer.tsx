@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { getPublicRenderData, type TreeRenderV1, RenderEdgeData } from '../api';
+import { getPublicRenderData, type RenderEdgeData } from '../api';
+import { RenderDataAdapter, type TreeViewModel } from '../adapters/renderDataAdapter';
 import { TreeCanvas, TreeCanvasRef } from './TreeCanvas';
 import { HierarchicalTreeCanvas } from './HierarchicalTreeCanvas';
 import { buildGenealogyHierarchy, type GenealogyHierarchyResult } from '../utils/genealogyHierarchy';
@@ -388,7 +389,7 @@ function HelpSidebar() {
 
 export function TreeViewer() {
   const { treeId = '' } = useParams();
-  const [data, setData] = useState<TreeRenderV1 | null>(null);
+  const [data, setData] = useState<TreeViewModel | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
@@ -516,15 +517,19 @@ export function TreeViewer() {
             });
           }
 
-          const normalized: TreeRenderV1 = { ...rawData, edges };
-          setData(normalized);
+          const normalized = { ...rawData, edges };
+          // Convert API DTO to view model through adapter boundary
+          const viewModel = RenderDataAdapter.toTreeViewModel(normalized);
+          setData(viewModel);
           // Build hierarchy once per fetch; respect optional root selection
           const hierarchyResult = buildGenealogyHierarchy(normalized, {
             rootPersonId: nextSelected ?? undefined,
           });
           setHierarchy(hierarchyResult);
         } else {
-          setData(rawData);
+          // Convert API DTO to view model through adapter boundary
+          const viewModel = RenderDataAdapter.toTreeViewModel(rawData);
+          setData(viewModel);
           const hierarchyResult = buildGenealogyHierarchy(rawData, {
             rootPersonId: nextSelected ?? undefined,
           });

@@ -12,10 +12,28 @@ import {
   Req,
   Header,
 } from '@nestjs/common';
+// Patch: declare global presence and activity stores for collaboration
+declare global {
+  // eslint-disable-next-line no-var
+  var __presence: Record<string, any[]> | undefined;
+  // eslint-disable-next-line no-var
+  var __activity: Record<string, any[]> | undefined;
+}
+
+function getPresenceStore(): Record<string, any[]> {
+  if (!globalThis.__presence) globalThis.__presence = {};
+  return globalThis.__presence;
+}
+
+function getActivityStore(): Record<string, any[]> {
+  if (!globalThis.__activity) globalThis.__activity = {};
+  return globalThis.__activity;
+}
 import { Request } from 'express';
 import { GenealogyApplicationService } from '../../application/services/genealogy-application.service';
 import type { UserContext } from '../../domain/types';
 import { PublicRead } from '../../infrastructure/guards/read.guards';
+import { AuthorizationPolicy } from '../../application/policies/authorization.policy';
 import {
   CreateFamilyTreeDto,
   CreatePersonDto,
@@ -40,8 +58,110 @@ import {
   AuthorizationError,
 } from '../../domain/errors';
 
-@Controller('trees')
+@Controller('api/trees')
 export class GenealogyController {
+        /**
+         * GET /api/trees/:treeId/activity
+         * Returns activity log for a tree (demo: in-memory)
+         */
+        @Get(':treeId/activity')
+        async getActivityLog(
+          @Param('treeId') treeId: string,
+          @Query('limit') limit: string = '50',
+          @Query('offset') offset: string = '0',
+          @Req() req: Request,
+        ): Promise<{ entries: any[]; total: number }> {
+          const activityStore = getActivityStore();
+          const all = activityStore[treeId] || [];
+          const l = parseInt(limit, 10) || 50;
+          const o = parseInt(offset, 10) || 0;
+          return { entries: all.slice(o, o + l), total: all.length };
+        }
+
+        /**
+         * POST /api/trees/:treeId/activity/log
+         * Logs an activity for a tree (demo: in-memory)
+         */
+        @Post(':treeId/activity/log')
+        async logActivity(
+          @Param('treeId') treeId: string,
+          @Body() activity: any,
+          @Req() req: Request,
+        ): Promise<any> {
+          const activityStore = getActivityStore();
+          if (!activityStore[treeId]) activityStore[treeId] = [];
+          const entry = { ...activity, id: Date.now().toString(36) + Math.random().toString(36).slice(2), timestamp: new Date().toISOString() };
+          activityStore[treeId].push(entry);
+          return entry;
+        }
+    /**
+     * --- COLLABORATION PRESENCE ENDPOINTS ---
+     * POST /trees/:treeId/presence/register
+     * Registers user presence for collaboration
+     */
+    @Post(':treeId/presence/register')
+    async registerPresence(
+      @Param('treeId') treeId: string,
+      @Body() body: { userId: string; sessionId: string; username: string },
+      @Req() req: Request,
+    ): Promise<any> {
+      // TODO: Store user presence in-memory or DB (for demo, use static array)
+      // Return all active users for this tree
+      // Replace with persistent storage in production
+      if (!global['__presence']) global['__presence'] = {};
+      if (!global['__presence'][treeId]) global['__presence'][treeId] = [];
+      // Remove any previous session for this user
+      global['__presence'][treeId] = global['__presence'][treeId].filter((u: any) => u.userId !== body.userId);
+      global['__presence'][treeId].push({ ...body, lastActive: Date.now() });
+      return global['__presence'][treeId];
+    }
+
+    /**
+     * POST /trees/:treeId/presence/update
+     * Updates user presence status
+     */
+    @Post(':treeId/presence/update')
+    async updatePresence(
+      @Param('treeId') treeId: string,
+      @Body() body: { userId: string; sessionId: string; status: string; personId?: string },
+      @Req() req: Request,
+    ): Promise<any> {
+      if (!global['__presence']) global['__presence'] = {};
+      if (!global['__presence'][treeId]) global['__presence'][treeId] = [];
+      const idx = global['__presence'][treeId].findIndex((u: any) => u.userId === body.userId);
+      if (idx >= 0) {
+        global['__presence'][treeId][idx] = { ...global['__presence'][treeId][idx], ...body, lastActive: Date.now() };
+      }
+      return global['__presence'][treeId];
+    }
+
+    /**
+     * POST /trees/:treeId/presence/unregister
+     * Removes user presence
+     */
+    @Post(':treeId/presence/unregister')
+    async unregisterPresence(
+      @Param('treeId') treeId: string,
+      @Body() body: { userId: string; sessionId: string },
+      @Req() req: Request,
+    ): Promise<void> {
+      if (!global['__presence']) global['__presence'] = {};
+      if (!global['__presence'][treeId]) return;
+      global['__presence'][treeId] = global['__presence'][treeId].filter((u: any) => u.userId !== body.userId);
+    }
+
+    /**
+     * GET /trees/:treeId/presence
+     * Returns all active users for a tree
+     */
+    @Get(':treeId/presence')
+    async getActiveUsers(
+      @Param('treeId') treeId: string,
+      @Req() req: Request,
+    ): Promise<any[]> {
+      if (!global['__presence']) global['__presence'] = {};
+      return global['__presence'][treeId] || [];
+    }
   constructor(
     private readonly appService: GenealogyApplicationService,
   ) {}
@@ -429,9 +549,8 @@ export class GenealogyController {
       const userContext = this.getUserContext(req);
       this.appService.setUserContext(userContext);
 
-      if (userContext.role !== 'OWNER') {
-        throw new AuthorizationError('Only owners can export');
-      }
+      // Delegate authorization to policy module
+      AuthorizationPolicy.assertIsOwner(userContext);
 
       return await this.appService.exportTreeSnapshot(treeId);
     } catch (err) {
@@ -453,9 +572,8 @@ export class GenealogyController {
       const userContext = this.getUserContext(req);
       this.appService.setUserContext(userContext);
 
-      if (userContext.role !== 'OWNER') {
-        throw new AuthorizationError('Only owners can export');
-      }
+      // Delegate authorization to policy module
+      AuthorizationPolicy.assertIsOwner(userContext);
 
       return await this.appService.exportTreeGedcom(treeId);
     } catch (err) {

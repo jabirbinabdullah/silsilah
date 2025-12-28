@@ -1,8 +1,11 @@
 export type TreeListItem = {
   treeId: string;
   name: string;
+  description?: string;
+  visibility?: 'public' | 'private';
   role: 'OWNER' | 'EDITOR' | 'VIEWER';
   personCount: number;
+  relationshipCount?: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -30,16 +33,18 @@ export type CreatePersonPayload = {
   deathDate?: string | null;
 };
 
-export type RenderNode = { id: string; displayName: string };
-export type RenderEdgeData = { id: string; source: string; target: string; type: 'spouse' | 'parent-child' };
+export type RenderNode = { readonly id: string; readonly displayName: string };
+export type RenderEdgeData = { readonly id: string; readonly source: string; readonly target: string; readonly type: 'spouse' | 'parent-child' };
 export type TreeRenderV1 = {
-  version: 'v1';
-  treeId: string;
-  nodes: RenderNode[];
-  edges: RenderEdgeData[];
-  spouseEdges?: { personAId: string; personBId: string }[]; // deprecated, kept for compatibility
-  parentChildEdges?: { personAId: string; personBId: string }[]; // deprecated, kept for compatibility
+  readonly version: 'v1';
+  readonly treeId: string;
+  readonly nodes: readonly RenderNode[];
+  readonly edges: readonly RenderEdgeData[];
+  readonly spouseEdges?: readonly { readonly personAId: string; readonly personBId: string }[]; // deprecated, kept for compatibility
+  readonly parentChildEdges?: readonly { readonly personAId: string; readonly personBId: string }[]; // deprecated, kept for compatibility
 };
+
+import { httpJson } from './utils/httpClient';
 
 const getBaseUrl = (): string => {
   const fromEnv = (import.meta as any).env?.VITE_API_BASE_URL as string | undefined;
@@ -59,33 +64,22 @@ export const setApiConfig = (apiBaseUrl?: string, token?: string) => {
 export async function getTrees(): Promise<TreeListResponse> {
   const base = getBaseUrl();
   const token = getAuthToken();
-  const res = await fetch(`${base}/trees`, {
+  return httpJson(`${base}/api/trees`, {
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   });
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Failed to fetch trees: ${res.status} ${text}`);
-  }
-  return res.json();
 }
 
-export async function getPublicRenderData(treeId: string): Promise<TreeRenderV1> {
-  const base = getBaseUrl();
-  const res = await fetch(`${base}/public/trees/${encodeURIComponent(treeId)}/render-data`);
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Failed to fetch render data: ${res.status} ${text}`);
-  }
-  return res.json();
-}
-
-export async function createPerson(treeId: string, payload: CreatePersonPayload): Promise<{ personId: string }> {
+export async function createTree(payload: {
+  name: string;
+  description?: string;
+  visibility?: 'public' | 'private';
+}): Promise<{ treeId: string; name: string }> {
   const base = getBaseUrl();
   const token = getAuthToken();
-  const res = await fetch(`${base}/trees/${encodeURIComponent(treeId)}/persons`, {
+  return httpJson(`${base}/api/trees`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -93,13 +87,40 @@ export async function createPerson(treeId: string, payload: CreatePersonPayload)
     },
     body: JSON.stringify(payload),
   });
+}
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Failed to create person: ${res.status} ${text}`);
-  }
+export async function duplicateTree(
+  sourceTreeId: string,
+  newName: string
+): Promise<{ treeId: string; name: string }> {
+  const base = getBaseUrl();
+  const token = getAuthToken();
+  return httpJson(`${base}/api/trees/${encodeURIComponent(sourceTreeId)}/duplicate`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ newName }),
+  });
+}
 
-  return res.json();
+export async function getPublicRenderData(treeId: string): Promise<TreeRenderV1> {
+  const base = getBaseUrl();
+  return httpJson(`${base}/public/trees/${encodeURIComponent(treeId)}/render-data`);
+}
+
+export async function createPerson(treeId: string, payload: CreatePersonPayload): Promise<{ personId: string }> {
+  const base = getBaseUrl();
+  const token = getAuthToken();
+  return httpJson(`${base}/api/trees/${encodeURIComponent(treeId)}/persons`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function establishParentChild(
@@ -108,7 +129,7 @@ export async function establishParentChild(
 ): Promise<{ message: string }> {
   const base = getBaseUrl();
   const token = getAuthToken();
-  const res = await fetch(`${base}/trees/${encodeURIComponent(treeId)}/relationships/parent-child`, {
+  return httpJson(`${base}/api/trees/${encodeURIComponent(treeId)}/relationships/parent-child`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -116,13 +137,22 @@ export async function establishParentChild(
     },
     body: JSON.stringify(payload),
   });
+}
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Failed to establish parent-child: ${res.status} ${text}`);
-  }
-
-  return res.json();
+export async function establishSpouseRelationship(
+  treeId: string,
+  payload: { personAId: string; personBId: string }
+): Promise<{ message: string }> {
+  const base = getBaseUrl();
+  const token = getAuthToken();
+  return httpJson(`${base}/api/trees/${encodeURIComponent(treeId)}/relationships/spouse`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function getPersonDetails(treeId: string, personId: string): Promise<PersonDetails> {
@@ -150,4 +180,251 @@ export function formatGender(gender?: string): string {
   if (g === 'MALE') return 'Male';
   if (g === 'FEMALE') return 'Female';
   return 'Unknown';
+}
+
+export async function findDuplicates(
+  treeId: string,
+  name: string,
+  birthDate?: string | null
+): Promise<Array<{ personId: string; displayName: string; similarity: number }>> {
+  const base = getBaseUrl();
+  const token = getAuthToken();
+  const params = new URLSearchParams({ name });
+  if (birthDate) params.append('birthDate', birthDate);
+  const res = await fetch(`${base}/api/trees/${encodeURIComponent(treeId)}/persons/find-duplicates?${params}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!res.ok) {
+    // On 404 or error, return empty list (no duplicates found)
+    return [];
+  }
+  return res.json().catch(() => []);
+}
+
+export async function mergePerson(
+  treeId: string,
+  sourcePersonId: string,
+  targetPersonId: string,
+  fieldsToKeep?: { name?: boolean; gender?: boolean; birthDate?: boolean; deathDate?: boolean; birthPlace?: boolean }
+): Promise<{ personId: string; message: string }> {
+  const base = getBaseUrl();
+  const token = getAuthToken();
+  return httpJson(`${base}/api/trees/${encodeURIComponent(treeId)}/persons/merge`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      sourcePersonId,
+      targetPersonId,
+      fieldsToKeep: fieldsToKeep || {},
+    }),
+  });
+}
+
+export async function updateTree(
+  treeId: string,
+  payload: { name?: string; description?: string; visibility?: 'public' | 'private' }
+): Promise<{ treeId: string; message: string }> {
+  const base = getBaseUrl();
+  const token = getAuthToken();
+  const res = await fetch(`${base}/api/trees/${encodeURIComponent(treeId)}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to update tree: ${res.status} ${text}`);
+  }
+  return res.json();
+}
+
+export async function deleteTree(treeId: string): Promise<{ message: string }> {
+  const base = getBaseUrl();
+  const token = getAuthToken();
+  const res = await fetch(`${base}/api/trees/${encodeURIComponent(treeId)}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to delete tree: ${res.status} ${text}`);
+  }
+  return res.json();
+}
+
+export type TreeExportData = {
+  version: '1.0';
+  tree: {
+    id: string;
+    name: string;
+    description?: string;
+  };
+  persons: Array<{
+    id: string;
+    name: string;
+    gender: 'MALE' | 'FEMALE' | 'UNKNOWN';
+    birthDate?: string | null;
+    deathDate?: string | null;
+    birthPlace?: string | null;
+  }>;
+  relationships: Array<{
+    id?: string;
+    type: 'parent-child' | 'spouse';
+    personAId: string;
+    personBId: string;
+  }>;
+};
+
+export type ImportValidationResult = {
+  valid: boolean;
+  errors: Array<{ row: number; field: string; message: string }>;
+  warnings: Array<{ row: number; message: string }>;
+  summary: {
+    personCount: number;
+    relationshipCount: number;
+    duplicateCount: number;
+    conflictCount: number;
+  };
+};
+
+export type ImportPreviewData = {
+  data: TreeExportData;
+  validation: ImportValidationResult;
+  existingDuplicates: Array<{
+    importId: string;
+    importName: string;
+    existingId: string;
+    existingName: string;
+    similarity: number;
+  }>;
+};
+
+async function exportTree(
+  treeId: string,
+  format: 'json-full' | 'json-minimal' | 'gedcom'
+): Promise<Blob> {
+  const base = getBaseUrl();
+  const token = getAuthToken();
+  const res = await fetch(`${base}/api/trees/${encodeURIComponent(treeId)}/export?format=${format}`, {
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to export tree: ${res.status} ${text}`);
+  }
+  return res.blob();
+}
+
+export { exportTree };
+
+export async function importTreePreview(
+  file: File,
+  targetTreeId?: string
+): Promise<ImportPreviewData> {
+  const base = getBaseUrl();
+  const token = getAuthToken();
+  const formData = new FormData();
+  formData.append('file', file);
+  if (targetTreeId) {
+    formData.append('targetTreeId', targetTreeId);
+  }
+
+  const res = await fetch(`${base}/api/trees/import/preview`, {
+    method: 'POST',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to validate import: ${res.status} ${text}`);
+  }
+  return res.json();
+}
+
+export async function importTree(
+  file: File,
+  options: {
+    createNewTree: boolean;
+    newTreeName?: string;
+    targetTreeId?: string;
+    handleDuplicates?: 'skip' | 'merge' | 'replace';
+  }
+): Promise<{ treeId: string; imported: number; skipped: number; merged: number }> {
+  const base = getBaseUrl();
+  const token = getAuthToken();
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('createNewTree', options.createNewTree.toString());
+  if (options.newTreeName) {
+    formData.append('newTreeName', options.newTreeName);
+  }
+  if (options.targetTreeId) {
+    formData.append('targetTreeId', options.targetTreeId);
+  }
+  if (options.handleDuplicates) {
+    formData.append('handleDuplicates', options.handleDuplicates);
+  }
+
+  const res = await fetch(`${base}/api/trees/import`, {
+    method: 'POST',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to import tree: ${res.status} ${text}`);
+  }
+  return res.json();
+}
+
+export async function updatePerson(
+  treeId: string,
+  personId: string,
+  payload: { name: string; gender: 'MALE' | 'FEMALE' | 'UNKNOWN'; birthDate?: string | null; birthPlace?: string | null; deathDate?: string | null }
+): Promise<{ personId: string }> {
+  const base = getBaseUrl();
+  const token = getAuthToken();
+  return httpJson(`${base}/api/trees/${encodeURIComponent(treeId)}/persons/${encodeURIComponent(personId)}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deletePerson(
+  treeId: string,
+  personId: string,
+  options?: { cascade?: 'person-only' | 'with-children' | 'with-all-relationships' }
+): Promise<{ message: string }> {
+  const base = getBaseUrl();
+  const token = getAuthToken();
+  const qp = options?.cascade ? `?cascade=${encodeURIComponent(options.cascade)}` : '';
+  return httpJson(`${base}/api/trees/${encodeURIComponent(treeId)}/persons/${encodeURIComponent(personId)}${qp}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  });
 }

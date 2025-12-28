@@ -19,43 +19,43 @@ import type { TreeRenderV1, RenderNode } from '../api';
  */
 export interface GenealogyHierarchyNode {
   /** Unique identifier matching RenderNode.id from TreeRenderDTO */
-  personId: string;
+  readonly personId: string;
   
   /** Display name from RenderNode.displayName */
-  displayName: string;
+  readonly displayName: string;
   
   /** 
    * Generation level in the hierarchy.
    * 0 = root generation (oldest ancestors with no parents in tree)
    * Increments by 1 for each descendant generation
    */
-  generation: number;
+  readonly generation: number;
   
   /**
    * Array of spouse person IDs at the same generation level.
    * Derived from spouseEdges where this person is involved.
    * Used for horizontal layout grouping, not hierarchical structure.
    */
-  spouses: string[];
+  readonly spouses: readonly string[];
   
   /**
    * Array of parent person IDs (for context/back-reference).
    * Empty array if this node is a root.
    * Used for cycle detection and relationship navigation.
    */
-  parents: string[];
+  readonly parents: readonly string[];
   
   /**
    * Recursive children array forming the hierarchy.
    * Each child is a full GenealogyHierarchyNode with generation = parent.generation + 1
    * This is the primary hierarchical structure for D3.hierarchy()
    */
-  children: GenealogyHierarchyNode[];
+  readonly children: readonly GenealogyHierarchyNode[];
   
   /**
    * Original RenderNode data from TreeRenderDTO for rendering.
    */
-  data: RenderNode;
+  readonly data: RenderNode;
 }
 
 /**
@@ -99,31 +99,31 @@ export interface GenealogyHierarchyResult {
    * If single root, this is the actual root person.
    * If rootPersonId was specified, this is that person's subtree.
    */
-  root: GenealogyHierarchyNode;
+  readonly root: GenealogyHierarchyNode;
   
   /**
    * Flat lookup map: personId → GenealogyHierarchyNode reference.
    * Enables O(1) access for selection/navigation.
    */
-  nodeMap: Map<string, GenealogyHierarchyNode>;
+  readonly nodeMap: ReadonlyMap<string, GenealogyHierarchyNode>;
   
   /**
    * Array of generation levels with metadata.
    * generations[0] = all root-level persons
    * generations[1] = all first-generation children, etc.
    */
-  generations: Generation[];
+  readonly generations: readonly Generation[];
   
   /**
    * Edges that were cut due to cycle detection or other issues.
    * Logged for debugging, not rendered.
    */
-  brokenEdges: BrokenEdge[];
+  readonly brokenEdges: readonly BrokenEdge[];
   
   /**
    * Whether the root is synthetic (multiple disconnected trees).
    */
-  isSyntheticRoot: boolean;
+  readonly isSyntheticRoot: boolean;
 }
 
 // ============================================================================
