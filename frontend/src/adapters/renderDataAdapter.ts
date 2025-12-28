@@ -10,6 +10,7 @@
 
 import type { TreeRenderV1, RenderNode, RenderEdgeData } from '../api';
 import type { GenealogyHierarchyResult } from '../utils/genealogyHierarchy';
+import { buildGenealogyHierarchy } from '../utils/genealogyHierarchy';
 
 /**
  * View model for tree visualization components.
@@ -190,5 +191,30 @@ export class RenderDataAdapter {
     if (!Array.isArray(viewModel.edges)) {
       throw new Error('TreeViewModel.edges must be an array');
     }
+  }
+
+  /**
+   * Builds hierarchical model from API DTO.
+   * IMPORTANT: This is the ONLY place hierarchy construction should happen.
+   * UI components must NEVER call buildGenealogyHierarchy directly.
+   * 
+   * @param dto - Raw TreeRenderV1 DTO from API
+   * @param options - Optional root person ID for hierarchy construction
+   * @returns Immutable hierarchy model for rendering
+   */
+  static buildHierarchyModel(
+    dto: TreeRenderV1,
+    options?: { rootPersonId?: string }
+  ): HierarchyViewModel {
+    // Normalize edges first (handle legacy formats)
+    const normalizedDto: TreeRenderV1 = dto.edges && dto.edges.length > 0
+      ? dto
+      : { ...dto, edges: this.normalizeEdges(dto) };
+
+    // Build hierarchy using domain logic
+    const hierarchy = buildGenealogyHierarchy(normalizedDto, options);
+
+    // Convert to view model
+    return this.toHierarchyViewModel(hierarchy);
   }
 }

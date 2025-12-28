@@ -1,10 +1,9 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { getPublicRenderData, type RenderEdgeData } from '../api';
-import { RenderDataAdapter, type TreeViewModel } from '../adapters/renderDataAdapter';
+import { getPublicRenderData } from '../api';
+import { RenderDataAdapter, type TreeViewModel, type HierarchyViewModel } from '../adapters/renderDataAdapter';
 import { TreeCanvas, TreeCanvasRef } from './TreeCanvas';
 import { HierarchicalTreeCanvas } from './HierarchicalTreeCanvas';
-import { buildGenealogyHierarchy, type GenealogyHierarchyResult } from '../utils/genealogyHierarchy';
 import { PersonDetailsDrawer } from './PersonDetailsDrawer';
 import { AddPersonDrawer } from './AddPersonDrawer';
 import { RelationshipManager } from './RelationshipManager';
@@ -406,7 +405,7 @@ export function TreeViewer() {
     const stored = localStorage.getItem('silsilah:networkLayoutOrientation');
     return (stored as 'vertical' | 'horizontal') || 'vertical';
   });
-  const [hierarchy, setHierarchy] = useState<GenealogyHierarchyResult | null>(null);
+  const [hierarchy, setHierarchy] = useState<HierarchyViewModel | null>(null);
   // Hierarchical canvas does not expose imperative API; keep ref optional
   const hierarchicalCanvasRef = useRef<any>(null);
   const networkCanvasRef = useRef<TreeCanvasRef>(null);
@@ -490,51 +489,15 @@ export function TreeViewer() {
       try {
         const rawData = await getPublicRenderData(treeId);
 
-        // Transform old format to new format if needed
-        if (rawData.spouseEdges || rawData.parentChildEdges) {
-          let edgeId = 0;
-          const edges: RenderEdgeData[] = [];
-
-          if (rawData.spouseEdges) {
-            rawData.spouseEdges.forEach((edge) => {
-              edges.push({
-                id: `edge-${edgeId++}`,
-                source: edge.personAId,
-                target: edge.personBId,
-                type: 'spouse',
-              });
-            });
-          }
-
-          if (rawData.parentChildEdges) {
-            rawData.parentChildEdges.forEach((edge) => {
-              edges.push({
-                id: `edge-${edgeId++}`,
-                source: edge.personAId,
-                target: edge.personBId,
-                type: 'parent-child',
-              });
-            });
-          }
-
-          const normalized = { ...rawData, edges };
-          // Convert API DTO to view model through adapter boundary
-          const viewModel = RenderDataAdapter.toTreeViewModel(normalized);
-          setData(viewModel);
-          // Build hierarchy once per fetch; respect optional root selection
-          const hierarchyResult = buildGenealogyHierarchy(normalized, {
-            rootPersonId: nextSelected ?? undefined,
-          });
-          setHierarchy(hierarchyResult);
-        } else {
-          // Convert API DTO to view model through adapter boundary
-          const viewModel = RenderDataAdapter.toTreeViewModel(rawData);
-          setData(viewModel);
-          const hierarchyResult = buildGenealogyHierarchy(rawData, {
-            rootPersonId: nextSelected ?? undefined,
-          });
-          setHierarchy(hierarchyResult);
-        }
+        // Convert API DTO to view model through adapter boundary
+        const viewModel = RenderDataAdapter.toTreeViewModel(rawData);
+        setData(viewModel);
+        
+        // Build hierarchy model through adapter (ONLY place hierarchy is built)
+        const hierarchyModel = RenderDataAdapter.buildHierarchyModel(rawData, {
+          rootPersonId: nextSelected ?? undefined,
+        });
+        setHierarchy(hierarchyModel);
 
         if (nextSelected !== undefined) {
           setSelectedPersonId(nextSelected);

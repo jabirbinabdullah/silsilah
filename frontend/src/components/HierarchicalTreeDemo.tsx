@@ -5,12 +5,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { HierarchicalTreeCanvas } from './HierarchicalTreeCanvas';
-import { buildGenealogyHierarchy } from '../utils/genealogyHierarchy';
+import { RenderDataAdapter, type HierarchyViewModel } from '../adapters/renderDataAdapter';
 import type { TreeRenderV1 } from '../api';
-import type { GenealogyHierarchyResult } from '../utils/genealogyHierarchy';
 
 export const HierarchicalTreeDemo: React.FC = () => {
-  const [hierarchy, setHierarchy] = useState<GenealogyHierarchyResult | null>(null);
+  const [hierarchy, setHierarchy] = useState<HierarchyViewModel | null>(null);
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   
   useEffect(() => {
@@ -44,8 +43,8 @@ export const HierarchicalTreeDemo: React.FC = () => {
       ],
     };
     
-    // Build hierarchy from flat data
-    const result = buildGenealogyHierarchy(sampleData);
+    // Build hierarchy from flat data through adapter
+    const result = RenderDataAdapter.buildHierarchyModel(sampleData);
     setHierarchy(result);
   }, []);
   

@@ -285,7 +285,7 @@ function addEdge(map: Map<string, string[]>, from: string, to: string): void {
  * @complexity O(N) where N = number of nodes
  */
 function findRoots(
-  nodes: RenderNode[],
+  nodes: readonly RenderNode[],
   childToParents: Map<string, string[]>,
   nodeDataMap: Map<string, RenderNode>
 ): string[] {

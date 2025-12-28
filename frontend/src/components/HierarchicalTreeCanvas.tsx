@@ -1,11 +1,14 @@
 /**
  * HierarchicalTreeCanvas - Hierarchical genealogy tree visualization
  * 
+ * PURE RENDERER: Only consumes pre-built hierarchy models.
+ * MUST NOT: Import TreeRenderV1, call buildGenealogyHierarchy, know about DTOs
+ * 
  * Uses d3.hierarchy and d3.tree for deterministic, stable layout.
  * No force simulation - nodes positioned algorithmically.
  * 
  * Features:
- * - Vertical orientation (root at top)
+ * - Vertical/horizontal orientation
  * - Expand/collapse subtrees (stores hidden children in _children)
  * - Pan and zoom
  * - Selection highlighting with auto-centering
@@ -16,10 +19,10 @@
 
 import React, { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
-import type {
-  GenealogyHierarchyResult,
-  GenealogyHierarchyNode,
-} from '../utils/genealogyHierarchy';
+import type { GenealogyHierarchyNode } from '../utils/genealogyHierarchy';
+
+// NOTE: HierarchyViewModel type imported from adapter, not raw DTO
+import type { HierarchyViewModel } from '../adapters/renderDataAdapter';
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -28,10 +31,11 @@ import type {
 /**
  * HierarchicalTreeCanvas component props.
  * Controlled component - parent manages selection and collapse state.
+ * IMPORTANT: Only accepts pre-built hierarchy model from adapter.
  */
 export interface HierarchicalTreeCanvasProps {
-  /** Hierarchical genealogy data from buildGenealogyHierarchy() */
-  hierarchy: GenealogyHierarchyResult;
+  /** Pre-built hierarchical model from RenderDataAdapter.buildHierarchyModel() */
+  hierarchy: HierarchyViewModel;
   
   /** Tree orientation (vertical only for now) */
   orientation: 'vertical' | 'horizontal';
@@ -431,7 +435,7 @@ export const HierarchicalTreeCanvas: React.FC<HierarchicalTreeCanvasProps> = ({
  */
 function calculateSpousePositions(
   root: TreeNode,
-  nodeMap: Map<string, GenealogyHierarchyNode>,
+  nodeMap: ReadonlyMap<string, GenealogyHierarchyNode>,
   spouseOffset: number,
   isVertical: boolean
 ): { spouseNodes: SpouseNode[]; spouseLinks: SpouseLink[] } {
@@ -452,22 +456,23 @@ function calculateSpousePositions(
       processedSpouses.add(linkId);
       
       // Check if spouse exists in the tree hierarchy
-      let spouseTreeNode: TreeNode | null = null;
+      let spouseTreeNode: TreeNode | undefined = undefined;
       root.each((n: TreeNode) => {
         if (n.data.personId === spouseId) {
           spouseTreeNode = n;
         }
       });
       
-      if (spouseTreeNode) {
+      if (spouseTreeNode !== undefined) {
         // Spouse is in tree - create reference link between tree positions
+        const spouse = spouseTreeNode as TreeNode;
         spouseLinks.push({
           sourceId: node.data.personId,
           targetId: spouseId,
           x1: node.x,
           y1: node.y,
-          x2: spouseTreeNode.x,
-          y2: spouseTreeNode.y,
+          x2: spouse.x,
+          y2: spouse.y,
         });
       } else {
         // Spouse not in tree - create adjacent spouse node
@@ -564,7 +569,7 @@ function renderTree(
     .attr('fill', 'none')
     .attr('stroke', theme.edgeColor)
     .attr('stroke-width', 2)
-    .attr('d', (d: d3.HierarchyPointLink<GenealogyHierarchyNode>) => {
+    .attr('d', (d: any) => {
       // Start from parent position (for smooth enter transition)
       const source = d.source as TreeNode;
       const sx = PX(source.x, source.y);
@@ -618,7 +623,7 @@ function renderTree(
     .exit()
     .transition()
     .duration(duration)
-    .attr('d', d => {
+    .attr('d', (d: any) => {
       // Collapse to parent position
       const source = d.source as TreeNode;
       const sx = PX(source.x, source.y);

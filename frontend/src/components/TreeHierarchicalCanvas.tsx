@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import * as d3 from 'd3';
-import { TreeRenderV1 } from '../api';
+import type { TreeViewModel } from '../adapters/renderDataAdapter';
 import { renderGenealogyNode } from './GenealogyNodeRenderer';
 import type { LayoutResponse } from '../workers/treeLayoutWorker';
 // For very large trees, offload layout computation to a worker
@@ -18,7 +18,7 @@ export type TreeHierarchicalCanvasRef = {
 };
 
 type TreeHierarchicalCanvasProps = {
-  data: TreeRenderV1;
+  data: TreeViewModel;
   rootPersonId: string | null;
   orientation: Orientation;
   onNodeClick: (personId: string) => void;
