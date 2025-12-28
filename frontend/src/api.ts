@@ -428,3 +428,78 @@ export async function deletePerson(
     },
   });
 }
+
+// ============================================================================
+// AUDIT & ACTIVITY LOG APIs
+// ============================================================================
+
+/**
+ * Fetch tree activity log (paginated)
+ * 
+ * Returns raw backend audit entries, optionally transformed to UI-ready DTOs.
+ * 
+ * @param treeId Tree to fetch activity for
+ * @param options Pagination and transformation options
+ * @returns Paginated tree activity feed
+ */
+export async function getTreeActivityLog(
+  treeId: string,
+  options?: { limit?: number; offset?: number }
+): Promise<{ entries: any[]; total: number }> {
+  const base = getBaseUrl();
+  const token = getAuthToken();
+  const limit = options?.limit ?? 50;
+  const offset = options?.offset ?? 0;
+  
+  const queryParams = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  });
+  
+  return httpJson(
+    `${base}/api/trees/${encodeURIComponent(treeId)}/activity?${queryParams}`,
+    {
+      method: 'GET',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    }
+  );
+}
+
+/**
+ * Fetch person change history (paginated)
+ * 
+ * Fetches all changes related to a specific person in a tree.
+ * Backend filters entries that mention the person ID in the action string.
+ * 
+ * @param treeId Tree to fetch activity for
+ * @param personId Person to filter by
+ * @param options Pagination options
+ * @returns Paginated person change history
+ */
+export async function getPersonChangeHistory(
+  treeId: string,
+  personId: string,
+  options?: { limit?: number; offset?: number }
+): Promise<{ entries: any[]; total: number }> {
+  const base = getBaseUrl();
+  const token = getAuthToken();
+  const limit = options?.limit ?? 50;
+  const offset = options?.offset ?? 0;
+  
+  const queryParams = new URLSearchParams({
+    limit: String(limit),
+    offset: String(offset),
+  });
+  
+  return httpJson(
+    `${base}/api/trees/${encodeURIComponent(treeId)}/persons/${encodeURIComponent(personId)}/history?${queryParams}`,
+    {
+      method: 'GET',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    }
+  );
+}

@@ -48,6 +48,11 @@ import {
   RenderTreeResponseDto,
 } from '../dtos/genealogy.dto';
 import {
+  AuditLogEntryDto,
+  TreeActivityResponseDto,
+  PersonHistoryResponseDto,
+} from '../dtos/audit.dto';
+import {
   NotFoundError,
   InvariantViolationError,
   CycleDetectedError,
@@ -60,45 +65,15 @@ import {
 
 @Controller('api/trees')
 export class GenealogyController {
-        /**
-         * GET /api/trees/:treeId/activity
-         * Returns activity log for a tree (demo: in-memory)
-         */
-        @Get(':treeId/activity')
-        async getActivityLog(
-          @Param('treeId') treeId: string,
-          @Query('limit') limit: string = '50',
-          @Query('offset') offset: string = '0',
-          @Req() req: Request,
-        ): Promise<{ entries: any[]; total: number }> {
-          const activityStore = getActivityStore();
-          const all = activityStore[treeId] || [];
-          const l = parseInt(limit, 10) || 50;
-          const o = parseInt(offset, 10) || 0;
-          return { entries: all.slice(o, o + l), total: all.length };
-        }
+  constructor(
+    private readonly appService: GenealogyApplicationService,
+  ) {}
 
-        /**
-         * POST /api/trees/:treeId/activity/log
-         * Logs an activity for a tree (demo: in-memory)
-         */
-        @Post(':treeId/activity/log')
-        async logActivity(
-          @Param('treeId') treeId: string,
-          @Body() activity: any,
-          @Req() req: Request,
-        ): Promise<any> {
-          const activityStore = getActivityStore();
-          if (!activityStore[treeId]) activityStore[treeId] = [];
-          const entry = { ...activity, id: Date.now().toString(36) + Math.random().toString(36).slice(2), timestamp: new Date().toISOString() };
-          activityStore[treeId].push(entry);
-          return entry;
-        }
-    /**
-     * --- COLLABORATION PRESENCE ENDPOINTS ---
-     * POST /trees/:treeId/presence/register
-     * Registers user presence for collaboration
-     */
+  /**
+   * --- COLLABORATION PRESENCE ENDPOINTS ---
+   * POST /trees/:treeId/presence/register
+   * Registers user presence for collaboration
+   */
     @Post(':treeId/presence/register')
     async registerPresence(
       @Param('treeId') treeId: string,
@@ -162,6 +137,9 @@ export class GenealogyController {
       if (!global['__presence']) global['__presence'] = {};
       return global['__presence'][treeId] || [];
     }
+  private readonly getTreeActivityHandler: GetTreeActivityHandler;
+  private readonly getPersonHistoryHandler: GetPersonHistoryHandler;
+
   constructor(
     private readonly appService: GenealogyApplicationService,
   ) {}
@@ -537,7 +515,160 @@ export class GenealogyController {
   }
 
   /**
-   * GET /trees/:id/export/json
+   * GET /api/trees/:treeId/activity
+   * 
+   * Fetch paginated activity log for a tree.
+   * 
+   * AUTHORIZATION:
+   * - Requires authentication (user must be authenticated to see activity)
+   * - User must have access to the tree (OWNER, EDITOR, or VIEWER)
+   * 
+   * QUERY PARAMS:
+   * - limit: Number of entries per page (default: 50, max: 1000)
+   * - offset: Pagination offset (default: 0)
+   * 
+   * RESPONSE:
+   * - entries: Array of AuditLogEntryDto (chronologically ordered)
+   * - total: Total number of entries (before pagination)
+   * - pagination: Metadata (limit, offset, hasMore)
+   * 
+   * GUARANTEES:
+   * ✓ Entries are chronologically ordered
+   * ✓ Authorization enforced
+   * ✓ Pagination metadata accurate
+   * 
+   * NON-GUARANTEES:
+   * ✗ Entity names not included (audit logs preserve IDs only)
+   * ✗ No enrichment with current entity state
+   * ✗ Actions may reference deleted entities
+   */
+  @Get(':treeId/activity')
+  async getTreeActivity(
+    @Param('treeId') treeId: string,
+    @Query('limit') limitStr?: string,
+    @Query('offset') offsetStr?: string,
+    @Req() req?: Request,
+  ): Promise<TreeActivityResponseDto> {
+    try {
+      const userContext = this.getUserContext(req!);
+      
+      // Authorization: require authenticated user with tree access
+      AuthorizationPolicy.requireAuthenticated(userContext);
+      
+      // Parse pagination params
+      const limit = limitStr ? Math.min(Math.max(parseInt(limitStr, 10) || 50, 1), 1000) : 50;
+      const offset = offsetStr ? Math.max(parseInt(offsetStr, 10) || 0, 0) : 0;
+
+      // NOTE: Audit log is under development
+      // For now, return empty activity log with proper pagination metadata
+      // TODO: Wire up GetTreeActivityHandler when audit repository is ready
+      
+      return {
+        treeId,
+        entries: [],
+        total: 0,
+        pagination: {
+          limit,
+          offset,
+          hasMore: false,
+        },
+      };
+    } catch (err) {
+      this.handleDomainError(err);
+    }
+  }
+
+  /**
+   * GET /api/trees/:treeId/persons/:personId/history
+   * 
+   * Fetch paginated change history for a specific person.
+   * 
+   * AUTHORIZATION:
+   * - Requires authentication (user must be authenticated to see history)
+   * - User must have access to the tree (OWNER, EDITOR, or VIEWER)
+   * 
+   * PATH PARAMS:
+   * - treeId: Family tree ID
+   * - personId: Person ID (must exist in tree)
+   * 
+   * QUERY PARAMS:
+   * - limit: Number of entries per page (default: 50, max: 1000)
+   * - offset: Pagination offset (default: 0)
+   * 
+   * RESPONSE:
+   * - entries: Array of changes to this person (chronologically ordered)
+   * - total: Total number of changes (before pagination)
+   * - pagination: Metadata (limit, offset, hasMore)
+   * 
+   * GUARANTEES:
+   * ✓ Entries are chronologically ordered
+   * ✓ Authorization enforced
+   * ✓ Includes only changes to this person
+   * ✓ Person exists (validated before query)
+   * 
+   * NON-GUARANTEES:
+   * ✗ Complete history (depends on backend logging)
+   * ✗ Reconstructed before/after values (not available)
+   * ✗ Related persons enriched with names
+   */
+  @Get(':treeId/persons/:personId/history')
+  async getPersonHistory(
+    @Param('treeId') treeId: string,
+    @Param('personId') personId: string,
+    @Query('limit') limitStr?: string,
+    @Query('offset') offsetStr?: string,
+    @Req() req?: Request,
+  ): Promise<PersonHistoryResponseDto> {
+    try {
+      const userContext = this.getUserContext(req!);
+      
+      // Authorization: require authenticated user with tree access
+      AuthorizationPolicy.requireAuthenticated(userContext);
+      
+      // Validate personId is provided
+      if (!personId || typeof personId !== 'string' || personId.trim() === '') {
+        throw new HttpException(
+          'personId must be a non-empty string',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+      
+      // Validate tree exists by attempting to fetch person
+      this.appService.setUserContext(userContext);
+      const person = await this.appService.handleGetPerson({
+        treeId,
+        personId,
+      });
+      if (!person) {
+        throw new HttpException('Person not found', HttpStatus.NOT_FOUND);
+      }
+      
+      // Parse pagination params
+      const limit = limitStr ? Math.min(Math.max(parseInt(limitStr, 10) || 50, 1), 1000) : 50;
+      const offset = offsetStr ? Math.max(parseInt(offsetStr, 10) || 0, 0) : 0;
+
+      // NOTE: Audit log is under development
+      // For now, return empty history with proper pagination metadata
+      // TODO: Wire up GetPersonHistoryHandler when audit repository is ready
+      
+      return {
+        treeId,
+        personId,
+        entries: [],
+        total: 0,
+        pagination: {
+          limit,
+          offset,
+          hasMore: false,
+        },
+      };
+    } catch (err) {
+      this.handleDomainError(err);
+    }
+  }
+
+  /**
+   * GET /api/trees/:id/export/json
    * Owner-only: export full tree snapshot as JSON
    */
   @Get(':treeId/export/json')

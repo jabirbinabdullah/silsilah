@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { getPublicRenderData } from '../api';
+import { GenealogyCommandBus } from '../commands/genealogyCommands';
 import { RenderDataAdapter, type TreeViewModel, type HierarchyViewModel } from '../adapters/renderDataAdapter';
 import { TreeCanvas, TreeCanvasRef } from './TreeCanvas';
 import { HierarchicalTreeCanvas } from './HierarchicalTreeCanvas';
@@ -16,6 +17,7 @@ import { useToast } from './ToastNotification';
 import { useCollaboration } from '../context/CollaborationContext';
 import { PresenceBar, PresenceIndicators } from './PresenceIndicators';
 import { ActivityFeed, CompactActivityFeed } from './ActivityFeed';
+import TreeActivityFeed from './TreeActivityFeed';
 import { EditConflictWarning, EditConflictModal, PersonEditingIndicator } from './EditConflictWarning';
 import StatisticsSidebar from './StatisticsSidebar';
 import { calculateTreeStatistics, type TreeStatistics, type PersonStats } from '../utils/statisticsCalculator';
@@ -424,6 +426,7 @@ export function TreeViewer() {
   const [statistics, setStatistics] = useState<TreeStatistics | null>(null);
   const [statisticsLoading, setStatisticsLoading] = useState(false);
   const [showStatistics, setShowStatistics] = useState(true);
+  const [sidebarTab, setSidebarTab] = useState<'activity' | 'help'>('activity');
 
   // Store expand/collapse handler from TreeCanvas
   const handleExpandCollapseAll = useCallback((handler: (action: 'expand' | 'collapse') => void) => {
@@ -852,7 +855,7 @@ export function TreeViewer() {
             </div>
             <div className="col-3 h-100 p-3 bg-light border-start overflow-auto">
               <div className="d-flex flex-column gap-2" style={{ height: '100%' }}>
-                {/* Sidebar tabs for Statistics, Help, and Activity */}
+                {/* Sidebar tabs for Statistics, Activity, and Help */}
                 <ul className="nav nav-tabs nav-fill" role="tablist" style={{ fontSize: '0.85rem' }}>
                   <li className="nav-item" role="presentation">
                     <button
@@ -866,10 +869,26 @@ export function TreeViewer() {
                   </li>
                   <li className="nav-item" role="presentation">
                     <button
-                      className={`nav-link ${!showStatistics ? 'active' : ''}`}
-                      onClick={() => setShowStatistics(false)}
+                      className={`nav-link ${!showStatistics && sidebarTab === 'activity' ? 'active' : ''}`}
+                      onClick={() => {
+                        setShowStatistics(false);
+                        setSidebarTab('activity');
+                      }}
                       role="tab"
-                      aria-selected={!showStatistics}
+                      aria-selected={!showStatistics && sidebarTab === 'activity'}
+                    >
+                      ⏱️ Activity
+                    </button>
+                  </li>
+                  <li className="nav-item" role="presentation">
+                    <button
+                      className={`nav-link ${!showStatistics && sidebarTab === 'help' ? 'active' : ''}`}
+                      onClick={() => {
+                        setShowStatistics(false);
+                        setSidebarTab('help');
+                      }}
+                      role="tab"
+                      aria-selected={!showStatistics && sidebarTab === 'help'}
                     >
                       ℹ️ Help
                     </button>
@@ -885,31 +904,17 @@ export function TreeViewer() {
                       isLoading={statisticsLoading}
                     />
                   </div>
+                ) : sidebarTab === 'activity' ? (
+                  <div className="flex-grow-1 overflow-auto">
+                    <TreeActivityFeed
+                      treeId={treeId}
+                      limit={50}
+                      onPersonLinkClick={(personId) => setSelectedPersonId(personId)}
+                    />
+                  </div>
                 ) : (
                   <div className="flex-grow-1 overflow-auto">
-                    <div className="d-flex flex-column gap-3" style={{ height: '100%' }}>
-                      {/* Activity Feed */}
-                      <div style={{ flex: '0 1 40%', overflowY: 'auto' }}>
-                        <ActivityFeed
-                          activities={collaboration.activities}
-                          hasMore={collaboration.hasMoreActivities}
-                          isLoading={isActivityLoading}
-                          onLoadMore={async () => {
-                            setIsActivityLoading(true);
-                            try {
-                              await collaboration.loadMoreActivities();
-                            } finally {
-                              setIsActivityLoading(false);
-                            }
-                          }}
-                        />
-                      </div>
-                      
-                      {/* Help Sidebar */}
-                      <div style={{ flex: '0 1 60%', overflowY: 'auto' }}>
-                        <HelpSidebar />
-                      </div>
-                    </div>
+                    <HelpSidebar />
                   </div>
                 )}
               </div>
@@ -960,8 +965,11 @@ export function TreeViewer() {
             },
             inverse: async (data: Record<string, any>) => {
               // Delete the person to undo
-              const { deletePerson } = await import('../api');
-              await deletePerson(data.treeId, data.personId);
+              await GenealogyCommandBus.deletePerson({
+                treeId: data.treeId,
+                personId: data.personId,
+                cascade: 'person-only',
+              });
               await fetchRenderData(null);
             },
           });
@@ -999,8 +1007,11 @@ export function TreeViewer() {
           currentSpouses={spouses}
           edges={data?.edges || []}
           onCreateSpouse={async (tid, payload) => {
-            const { establishSpouseRelationship } = await import('../api');
-            return establishSpouseRelationship(tid, payload);
+            return GenealogyCommandBus.addSpouseRelationship({
+              treeId: tid,
+              personAId: payload.personAId,
+              personBId: payload.personBId,
+            });
           }}
         />
       )}

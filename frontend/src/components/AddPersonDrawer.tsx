@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { createPerson, CreatePersonPayload } from '../api';
+import { GenealogyCommandBus } from '../commands/genealogyCommands';
+import type { CreatePersonPayload } from '../api';
 
 type AddPersonDrawerProps = {
   treeId: string;
@@ -14,7 +15,10 @@ const genders: Array<{ value: CreatePersonPayload['gender']; label: string }> = 
   { value: 'UNKNOWN', label: 'Unknown' },
 ];
 
-export const AddPersonDrawer: React.FC<AddPersonDrawerProps> = ({
+import { withErrorBoundary } from '../utils/withErrorBoundary';
+import { PersonForm } from './PersonForm';
+
+const AddPersonDrawerInner: React.FC<AddPersonDrawerProps> = ({
   treeId,
   open,
   onClose,
@@ -27,6 +31,7 @@ export const AddPersonDrawer: React.FC<AddPersonDrawerProps> = ({
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof CreatePersonPayload, string>>>({});
 
   useEffect(() => {
     // Reset form when drawer is closed
@@ -37,6 +42,37 @@ export const AddPersonDrawer: React.FC<AddPersonDrawerProps> = ({
 
   const updateField = (key: keyof CreatePersonPayload, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+    const err = validateField(key, value);
+    setFieldErrors((prev) => ({
+      ...prev,
+      [key]: err || undefined,
+    }));
+  };
+
+  const validateField = (key: keyof CreatePersonPayload, val: string): string | null => {
+    if (key === 'personId') {
+      if (!val || val.trim() === '') return 'Person ID is required';
+      if (!/^[a-zA-Z0-9_-]+$/.test(val)) return 'Invalid format (letters, numbers, dash, underscore)';
+    }
+    if (key === 'name') {
+      if (!val || val.trim() === '') return 'Name is required';
+    }
+    if (key === 'gender') {
+      if (!val) return 'Gender is required';
+    }
+    if (key === 'birthDate' && val && form.deathDate) {
+      const b = new Date(val);
+      const d = new Date(form.deathDate);
+      if (Number.isNaN(b.getTime()) || Number.isNaN(d.getTime())) return null;
+      if (d < b) return 'Death date must be after birth date';
+    }
+    if (key === 'deathDate' && val && form.birthDate) {
+      const b = new Date(form.birthDate);
+      const d = new Date(val);
+      if (Number.isNaN(b.getTime()) || Number.isNaN(d.getTime())) return null;
+      if (d < b) return 'Death date must be after birth date';
+    }
+    return null;
   };
 
   const resetForm = () => {
@@ -49,6 +85,7 @@ export const AddPersonDrawer: React.FC<AddPersonDrawerProps> = ({
       deathDate: '',
     });
     setError(null);
+    setFieldErrors({});
   };
 
   const validate = (): string | null => {
@@ -86,9 +123,22 @@ export const AddPersonDrawer: React.FC<AddPersonDrawerProps> = ({
         birthPlace: form.birthPlace || null,
         deathDate: form.deathDate || null,
       };
-      const res = await createPerson(treeId, payload);
-      onCreated(res.personId);
-      onClose(); // This will trigger the parent to set open=false
+      // Use command bus instead of direct API call
+      const result = await GenealogyCommandBus.addPerson({
+        treeId,
+        name: payload.name,
+        gender: payload.gender,
+        birthDate: payload.birthDate,
+        birthPlace: payload.birthPlace,
+        deathDate: payload.deathDate,
+      });
+      
+      if (result.success && result.data) {
+        onCreated(result.data.personId);
+        onClose(); // This will trigger the parent to set open=false
+      } else {
+        setError(result.error || 'Failed to add person');
+      }
     } catch (e: any) {
       setError(e?.message || 'Failed to add person');
     } finally {
@@ -126,99 +176,7 @@ export const AddPersonDrawer: React.FC<AddPersonDrawerProps> = ({
           >
             <div className="flex-grow-1 overflow-y-auto p-3">
               {error && <div className="alert alert-danger">{error}</div>}
-
-              <div className="mb-3">
-                <label htmlFor="personId" className="form-label">
-                  Person ID <span className="text-danger">*</span>
-                </label>
-                <input
-                  id="personId"
-                  className="form-control"
-                  value={form.personId}
-                  onChange={(e) => updateField('personId', e.target.value)}
-                  placeholder="e.g., john-smith-1972"
-                  autoFocus
-                />
-                <div className="form-text">
-                  Use letters, numbers, dash, or underscore only.
-                </div>
-              </div>
-
-              <div className="mb-3">
-                <label htmlFor="name" className="form-label">
-                  Full Name <span className="text-danger">*</span>
-                </label>
-                <input
-                  id="name"
-                  className="form-control"
-                  value={form.name}
-                  onChange={(e) => updateField('name', e.target.value)}
-                  placeholder="e.g., John Michael Smith"
-                />
-              </div>
-
-              <div className="mb-3">
-                <label htmlFor="gender" className="form-label">
-                  Gender <span className="text-danger">*</span>
-                </label>
-                <select
-                  id="gender"
-                  className="form-select"
-                  value={form.gender}
-                  onChange={(e) =>
-                    updateField('gender', e.target.value as CreatePersonPayload['gender'])
-                  }
-                >
-                  {genders.map((g) => (
-                    <option key={g.value} value={g.value}>
-                      {g.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <hr className="my-4" />
-              <h6 className="text-muted">Additional Details (Optional)</h6>
-
-              <div className="row g-3">
-                <div className="col">
-                  <label htmlFor="birthDate" className="form-label">
-                    Birth Date
-                  </label>
-                  <input
-                    type="date"
-                    id="birthDate"
-                    className="form-control"
-                    value={form.birthDate || ''}
-                    onChange={(e) => updateField('birthDate', e.target.value)}
-                  />
-                </div>
-                <div className="col">
-                  <label htmlFor="deathDate" className="form-label">
-                    Death Date
-                  </label>
-                  <input
-                    type="date"
-                    id="deathDate"
-                    className="form-control"
-                    value={form.deathDate || ''}
-                    onChange={(e) => updateField('deathDate', e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="mt-3">
-                <label htmlFor="birthPlace" className="form-label">
-                  Birth Place
-                </label>
-                <input
-                  id="birthPlace"
-                  className="form-control"
-                  value={form.birthPlace || ''}
-                  onChange={(e) => updateField('birthPlace', e.target.value)}
-                  placeholder="e.g., Boston, Massachusetts, USA"
-                />
-              </div>
+              <PersonForm value={form} onChange={setForm} disabled={saving} showPersonId errors={fieldErrors} />
             </div>
 
             <div className="p-3 bg-light border-top d-flex justify-content-end gap-2">
@@ -241,3 +199,5 @@ export const AddPersonDrawer: React.FC<AddPersonDrawerProps> = ({
     </>
   );
 };
+
+export const AddPersonDrawer = withErrorBoundary(AddPersonDrawerInner);
