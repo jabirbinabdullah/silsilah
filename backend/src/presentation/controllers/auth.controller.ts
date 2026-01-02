@@ -1,7 +1,9 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, Inject } from '@nestjs/common';
+import { Controller, Post, Body, HttpCode, HttpStatus, Inject, Req, HttpException } from '@nestjs/common';
+import { Request } from 'express';
 import { AuthService } from '../../infrastructure/services/auth.service';
 import type { UserRepository } from '../../infrastructure/repositories/user.mongo.repository';
 import { InvalidCredentialsError } from '../../domain/errors';
+import { assertRateLimit } from '../../infrastructure/security/rate-limit';
 
 export interface LoginRequest {
   username: string;
@@ -24,7 +26,13 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  async login(@Body() req: LoginRequest): Promise<LoginResponse> {
+  async login(@Body() req: LoginRequest, @Req() httpReq: Request): Promise<LoginResponse> {
+    try {
+      assertRateLimit(`auth:login:${httpReq.ip}`, 20, 60_000); // 20 requests/minute per IP
+    } catch (err) {
+      throw new HttpException('Too Many Requests', HttpStatus.TOO_MANY_REQUESTS);
+    }
+
     if (!req.username || !req.password) {
       throw new InvalidCredentialsError('Username and password are required');
     }

@@ -31,6 +31,8 @@ function getActivityStore(): Record<string, any[]> {
 }
 import { Request } from 'express';
 import { GenealogyApplicationService } from '../../application/services/genealogy-application.service';
+import { GetTreeActivityHandler } from '../../application/queries/get-tree-activity.query';
+import { GetPersonHistoryHandler } from '../../application/queries/get-person-history.query';
 import type { UserContext } from '../../domain/types';
 import { PublicRead } from '../../infrastructure/guards/read.guards';
 import { AuthorizationPolicy } from '../../application/policies/authorization.policy';
@@ -62,11 +64,14 @@ import {
   PersonHasRelationshipsError,
   AuthorizationError,
 } from '../../domain/errors';
+import { assertRateLimit } from '../../infrastructure/security/rate-limit';
 
 @Controller('api/trees')
 export class GenealogyController {
   constructor(
     private readonly appService: GenealogyApplicationService,
+    private readonly getTreeActivityHandler: GetTreeActivityHandler,
+    private readonly getPersonHistoryHandler: GetPersonHistoryHandler,
   ) {}
 
   /**
@@ -74,75 +79,65 @@ export class GenealogyController {
    * POST /trees/:treeId/presence/register
    * Registers user presence for collaboration
    */
-    @Post(':treeId/presence/register')
-    async registerPresence(
-      @Param('treeId') treeId: string,
-      @Body() body: { userId: string; sessionId: string; username: string },
-      @Req() req: Request,
-    ): Promise<any> {
-      // TODO: Store user presence in-memory or DB (for demo, use static array)
-      // Return all active users for this tree
-      // Replace with persistent storage in production
-      if (!global['__presence']) global['__presence'] = {};
-      if (!global['__presence'][treeId]) global['__presence'][treeId] = [];
-      // Remove any previous session for this user
-      global['__presence'][treeId] = global['__presence'][treeId].filter((u: any) => u.userId !== body.userId);
-      global['__presence'][treeId].push({ ...body, lastActive: Date.now() });
-      return global['__presence'][treeId];
-    }
+  @Post(':treeId/presence/register')
+  async registerPresence(
+    @Param('treeId') treeId: string,
+    @Body() body: { userId: string; sessionId: string; username: string },
+    @Req() req: Request,
+  ): Promise<any> {
+    if (!global['__presence']) global['__presence'] = {};
+    if (!global['__presence'][treeId]) global['__presence'][treeId] = [];
+    global['__presence'][treeId] = global['__presence'][treeId].filter((u: any) => u.userId !== body.userId);
+    global['__presence'][treeId].push({ ...body, lastActive: Date.now() });
+    return global['__presence'][treeId];
+  }
 
-    /**
-     * POST /trees/:treeId/presence/update
-     * Updates user presence status
-     */
-    @Post(':treeId/presence/update')
-    async updatePresence(
-      @Param('treeId') treeId: string,
-      @Body() body: { userId: string; sessionId: string; status: string; personId?: string },
-      @Req() req: Request,
-    ): Promise<any> {
-      if (!global['__presence']) global['__presence'] = {};
-      if (!global['__presence'][treeId]) global['__presence'][treeId] = [];
-      const idx = global['__presence'][treeId].findIndex((u: any) => u.userId === body.userId);
-      if (idx >= 0) {
-        global['__presence'][treeId][idx] = { ...global['__presence'][treeId][idx], ...body, lastActive: Date.now() };
-      }
-      return global['__presence'][treeId];
+  /**
+   * POST /trees/:treeId/presence/update
+   * Updates user presence status
+   */
+  @Post(':treeId/presence/update')
+  async updatePresence(
+    @Param('treeId') treeId: string,
+    @Body() body: { userId: string; sessionId: string; status: string; personId?: string },
+    @Req() req: Request,
+  ): Promise<any> {
+    if (!global['__presence']) global['__presence'] = {};
+    if (!global['__presence'][treeId]) global['__presence'][treeId] = [];
+    const idx = global['__presence'][treeId].findIndex((u: any) => u.userId === body.userId);
+    if (idx >= 0) {
+      global['__presence'][treeId][idx] = { ...global['__presence'][treeId][idx], ...body, lastActive: Date.now() };
     }
+    return global['__presence'][treeId];
+  }
 
-    /**
-     * POST /trees/:treeId/presence/unregister
-     * Removes user presence
-     */
-    @Post(':treeId/presence/unregister')
-    async unregisterPresence(
-      @Param('treeId') treeId: string,
-      @Body() body: { userId: string; sessionId: string },
-      @Req() req: Request,
-    ): Promise<void> {
-      if (!global['__presence']) global['__presence'] = {};
-      if (!global['__presence'][treeId]) return;
-      global['__presence'][treeId] = global['__presence'][treeId].filter((u: any) => u.userId !== body.userId);
-    }
+  /**
+   * POST /trees/:treeId/presence/unregister
+   * Removes user presence
+   */
+  @Post(':treeId/presence/unregister')
+  async unregisterPresence(
+    @Param('treeId') treeId: string,
+    @Body() body: { userId: string; sessionId: string },
+    @Req() req: Request,
+  ): Promise<void> {
+    if (!global['__presence']) global['__presence'] = {};
+    if (!global['__presence'][treeId]) return;
+    global['__presence'][treeId] = global['__presence'][treeId].filter((u: any) => u.userId !== body.userId);
+  }
 
-    /**
-     * GET /trees/:treeId/presence
-     * Returns all active users for a tree
-     */
-    @Get(':treeId/presence')
-    async getActiveUsers(
-      @Param('treeId') treeId: string,
-      @Req() req: Request,
-    ): Promise<any[]> {
-      if (!global['__presence']) global['__presence'] = {};
-      return global['__presence'][treeId] || [];
-    }
-  private readonly getTreeActivityHandler: GetTreeActivityHandler;
-  private readonly getPersonHistoryHandler: GetPersonHistoryHandler;
-
-  constructor(
-    private readonly appService: GenealogyApplicationService,
-  ) {}
+  /**
+   * GET /trees/:treeId/presence
+   * Returns all active users for a tree
+   */
+  @Get(':treeId/presence')
+  async getActiveUsers(
+    @Param('treeId') treeId: string,
+    @Req() req: Request,
+  ): Promise<any[]> {
+    if (!global['__presence']) global['__presence'] = {};
+    return global['__presence'][treeId] || [];
+  }
 
   /**
    * Extract UserContext from JWT token in request.
@@ -554,23 +549,31 @@ export class GenealogyController {
       
       // Authorization: require authenticated user with tree access
       AuthorizationPolicy.requireAuthenticated(userContext);
+      assertRateLimit(`audit:tree:${treeId}:${req?.ip ?? 'unknown'}`, 120, 60_000); // 120 req/min per IP
       
       // Parse pagination params
       const limit = limitStr ? Math.min(Math.max(parseInt(limitStr, 10) || 50, 1), 1000) : 50;
       const offset = offsetStr ? Math.max(parseInt(offsetStr, 10) || 0, 0) : 0;
+      const result = await this.getTreeActivityHandler.execute({ treeId, limit, offset });
 
-      // NOTE: Audit log is under development
-      // For now, return empty activity log with proper pagination metadata
-      // TODO: Wire up GetTreeActivityHandler when audit repository is ready
-      
       return {
         treeId,
-        entries: [],
-        total: 0,
+        entries: result.entries.map((entry) => ({
+          id: entry.id ?? `${entry.treeId}-${entry.timestamp.getTime()}`,
+          treeId: entry.treeId,
+          action: entry.action,
+          actor: {
+            userId: entry.userId,
+            username: entry.username,
+            role: entry.role,
+          },
+          timestamp: entry.timestamp.toISOString(),
+        })),
+        total: result.total,
         pagination: {
           limit,
           offset,
-          hasMore: false,
+          hasMore: result.hasMore,
         },
       };
     } catch (err) {
@@ -624,6 +627,7 @@ export class GenealogyController {
       
       // Authorization: require authenticated user with tree access
       AuthorizationPolicy.requireAuthenticated(userContext);
+      assertRateLimit(`audit:person:${treeId}:${personId}:${req?.ip ?? 'unknown'}`, 120, 60_000);
       
       // Validate personId is provided
       if (!personId || typeof personId !== 'string' || personId.trim() === '') {
@@ -647,19 +651,27 @@ export class GenealogyController {
       const limit = limitStr ? Math.min(Math.max(parseInt(limitStr, 10) || 50, 1), 1000) : 50;
       const offset = offsetStr ? Math.max(parseInt(offsetStr, 10) || 0, 0) : 0;
 
-      // NOTE: Audit log is under development
-      // For now, return empty history with proper pagination metadata
-      // TODO: Wire up GetPersonHistoryHandler when audit repository is ready
-      
+      const result = await this.getPersonHistoryHandler.execute({ treeId, personId, limit, offset });
+
       return {
         treeId,
         personId,
-        entries: [],
-        total: 0,
+        entries: result.entries.map((entry) => ({
+          id: entry.id ?? `${entry.treeId}-${entry.timestamp.getTime()}`,
+          treeId: entry.treeId,
+          action: entry.action,
+          actor: {
+            userId: entry.userId,
+            username: entry.username,
+            role: entry.role,
+          },
+          timestamp: entry.timestamp.toISOString(),
+        })),
+        total: result.total,
         pagination: {
           limit,
           offset,
-          hasMore: false,
+          hasMore: result.hasMore,
         },
       };
     } catch (err) {
@@ -718,6 +730,10 @@ export class GenealogyController {
   private handleDomainError(err: unknown): never {
     if (err instanceof HttpException) {
       throw err;
+    }
+
+    if (typeof err === 'object' && err && (err as any)['status'] === 429) {
+      throw new HttpException('Too Many Requests', HttpStatus.TOO_MANY_REQUESTS);
     }
 
     if (err instanceof AuthorizationError) {

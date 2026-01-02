@@ -18,6 +18,14 @@ class MockAuditLogRepository implements AuditLogRepository {
   async append(entry: AuditLogEntry): Promise<void> {
     // No-op for query tests
   }
+
+  async findByTree(treeId: string, limit: number, offset: number) {
+    return { entries: [], total: 0 };
+  }
+
+  async findByPerson(treeId: string, personId: string, limit: number, offset: number) {
+    return { entries: [], total: 0 };
+  }
 }
 
 class MockGenealogyGraphRepository implements GenealogyGraphRepository {

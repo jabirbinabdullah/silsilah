@@ -7,7 +7,7 @@
  * @module getTreeActivityQuery
  */
 
-import type { AuditLogRepository, AuditLogEntry } from '../../infrastructure/repositories/audit-log.repository';
+import type { AuditLogEntry, AuditLogRepository } from '../../infrastructure/repositories/audit-log.repository';
 import type { GenealogyGraphRepository } from '../../infrastructure/repositories/genealogy-graph.repository';
 
 /**
@@ -77,14 +77,10 @@ export class GetTreeActivityHandler {
       throw new Error(`Tree not found: ${query.treeId}`);
     }
 
-    // Fetch all activity entries for this tree
-    // NOTE: Current implementation stores entries in-memory per tree
-    // Production implementation would query database with limit/offset
-    const allEntries = await this.getActivityEntries(query.treeId);
-    const total = allEntries.length;
-
-    // Apply pagination
-    const entries = allEntries.slice(offset, offset + limit);
+    // Fetch paginated activity entries from repository
+    const page = await this.auditLogRepository.findByTree(query.treeId, limit, offset);
+    const entries = page.entries;
+    const total = page.total;
 
     return {
       treeId: query.treeId,
@@ -96,15 +92,4 @@ export class GetTreeActivityHandler {
     };
   }
 
-  /**
-   * Fetch all activity entries for tree
-   * 
-   * @internal
-   * Currently in-memory. Replace with repository query in production.
-   */
-  private async getActivityEntries(treeId: string): Promise<AuditLogEntry[]> {
-    // TODO: Query from auditLogRepository with index on treeId
-    // For now, return empty array (actual audit logging to be added)
-    return [];
-  }
 }

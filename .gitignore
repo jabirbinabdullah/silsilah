@@ -2,9 +2,14 @@
 node_modules/
 dist/
 build/
-.env
-.env.*
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+
+# Environment files
+.env
+.env.*
+.env.local
+.env.*.local
+**/.env
