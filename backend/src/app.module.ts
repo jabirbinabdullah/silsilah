@@ -228,4 +228,19 @@ const appServiceProvider = {
   ],
   controllers: [GenealogyController, AuthController, PublicController, HealthController],
 })
-export class AppModule {}
+export class AppModule implements OnModuleDestroy {
+  constructor(
+    @Inject('MONGO_CLIENT') private readonly mongoClient: MongoClient,
+    @Optional() @Inject('READONLY_MONGO_CLIENT') private readonly readonlyMongoClient?: MongoClient | null,
+  ) {}
+
+  async onModuleDestroy() {
+    try {
+      await this.mongoClient?.close();
+      await this.readonlyMongoClient?.close();
+      console.log('[MONGO] Connections closed');
+    } catch (err) {
+      console.error('[MONGO] Error closing connections:', err);
+    }
+  }
+}
