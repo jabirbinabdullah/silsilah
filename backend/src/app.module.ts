@@ -15,6 +15,59 @@ import { AuthService } from './infrastructure/services/auth.service';
 import { JwtGuard } from './infrastructure/guards/jwt.guard';
 import { GenealogyGraph } from './domain/genealogy-graph';
 
+/**
+ * Ensure audit collection indexes exist.
+ * Required for optimal query performance on activity/history endpoints.
+ */
+async function ensureAuditIndexes(client: MongoClient, dbName: string): Promise<void> {
+  try {
+    const db = client.db(dbName);
+    const collection = db.collection('audit_logs');
+
+    // Required indexes
+    const requiredIndexes: Array<{ spec: Record<string, 1 | -1>; name: string; description: string }> = [
+      {
+        spec: { treeId: 1, timestamp: -1 },
+        name: 'idx_treeId_timestamp',
+        description: 'Tree activity queries (sorted by recency)',
+      },
+      {
+        spec: { personId: 1, timestamp: -1 },
+        name: 'idx_personId_timestamp',
+        description: 'Person history queries (sorted by recency)',
+      },
+    ];
+
+    // Optional indexes
+    const optionalIndexes: Array<{ spec: Record<string, 1 | -1>; name: string; description: string }> = [
+      {
+        spec: { action: 1, timestamp: -1 },
+        name: 'idx_action_timestamp',
+        description: 'Action filtering queries',
+      },
+    ];
+
+    const allIndexes = [...requiredIndexes, ...optionalIndexes];
+
+    for (const { spec, name, description } of allIndexes) {
+      try {
+        await collection.createIndex(spec, { name });
+        console.log(`[AUDIT] Index ensured: ${name} - ${description}`);
+      } catch (err) {
+        if ((err as any).codeName === 'IndexAlreadyExists') {
+          console.log(`[AUDIT] Index already exists: ${name}`);
+        } else {
+          console.warn(`[AUDIT] Failed to create index ${name}:`, err);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[AUDIT] Error ensuring indexes:', err);
+    // Don't throw—allow app to start even if indexing fails
+  }
+}
+
+
 // Simple factory for GenealogyGraph
 const genealogyGraphFactory = {
   create: (treeId: string) => new GenealogyGraph(treeId),
@@ -98,9 +151,14 @@ const userRepositoryProvider = {
 // AuditLog Repository provider (append-only)
 const auditLogRepositoryProvider = {
   provide: 'AUDIT_LOG_REPOSITORY',
-  useFactory: (mongoClient: MongoClient) => {
+  useFactory: async (mongoClient: MongoClient) => {
     const dbName = process.env.MONGODB_DB_NAME || 'silsilah';
-    return new MongoAuditLogRepository(mongoClient, dbName);
+    const auditRepo = new MongoAuditLogRepository(mongoClient, dbName);
+    
+    // Ensure audit collection indexes exist on startup
+    await ensureAuditIndexes(mongoClient, dbName);
+    
+    return auditRepo;
   },
   inject: ['MONGO_CLIENT'],
 };
