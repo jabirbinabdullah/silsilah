@@ -76,12 +76,14 @@ export const PersonDetailsDrawer: React.FC<PersonDetailsDrawerProps> = ({
         return;
       }
       try {
-        const res = await getPersonChangeHistory(treeId, personId, { limit: 1, offset: 0 });
-        const entry = (res as any).entries?.[0];
+        const res = await getPersonHistory(treeId, personId, 1, 1);
+        const entry = res.entries?.[0];
         if (!cancelled && entry) {
-          const username: string = entry.actor?.username ?? 'anonymous';
-          const role: string = entry.actor?.role ?? 'UNKNOWN';
-          const isSystem = role === 'UNKNOWN' || ['system', 'anonymous'].includes(String(username).toLowerCase());
+          const username: string = entry.user?.email ?? 'anonymous';
+          const role: string = (entry.details as any)?.role ?? 'UNKNOWN';
+          const isSystem =
+            role === 'UNKNOWN' ||
+            ['system', 'anonymous'].includes(String(username).toLowerCase());
           setLastModified({ username, timestamp: entry.timestamp, isSystem });
         } else if (!cancelled) {
           setLastModified(null);
@@ -211,6 +213,7 @@ export const PersonDetailsDrawer: React.FC<PersonDetailsDrawerProps> = ({
               className="btn btn-outline-success btn-sm" 
               onClick={handleQuickAddChild} 
               title="Quick add child with auto-generated name" 
+              aria-label="Quick add child"
               disabled={!personId || creatingChild}
             >
               {creatingChild ? (
@@ -222,10 +225,10 @@ export const PersonDetailsDrawer: React.FC<PersonDetailsDrawerProps> = ({
                 '+ Child'
               )}
             </button>
-            <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => onSelectPerson(personId!)} title="Focus in tree" disabled={!personId}>Focus</button>
-            <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => onAddRelationship && onAddRelationship({})} title="Add relative" disabled={!personId}>Add Relative</button>
-            <button type="button" className="btn btn-primary btn-sm" onClick={() => setEditDrawerOpen(true)} title="Edit" disabled={!personId}>Edit</button>
-            <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => setDeleteModalOpen(true)} title="Delete" disabled={!personId}>Delete</button>
+            <button type="button" className="btn btn-outline-secondary btn-sm" onClick={() => onSelectPerson(personId!)} title="Focus in tree" aria-label="Focus person in tree" disabled={!personId}>Focus</button>
+            <button type="button" className="btn btn-outline-primary btn-sm" onClick={() => onAddRelationship && onAddRelationship({})} title="Add relative" aria-label="Add a new relative" disabled={!personId}>Add Relative</button>
+            <button type="button" className="btn btn-primary btn-sm" onClick={() => setEditDrawerOpen(true)} title="Edit" aria-label="Edit person" disabled={!personId}>Edit</button>
+            <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => setDeleteModalOpen(true)} title="Delete" aria-label="Delete person" disabled={!personId}>Delete</button>
                   {/* EditPersonDrawer */}
                   {editDrawerOpen && personId && (
                     <EditPersonDrawer

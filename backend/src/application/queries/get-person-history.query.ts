@@ -8,7 +8,7 @@
  * @module getPersonHistoryQuery
  */
 
-import type { AuditLogRepository, AuditLogEntry } from '../../infrastructure/repositories/audit-log.repository';
+import type { AuditLogEntry, AuditLogRepository } from '../../infrastructure/repositories/audit-log.repository';
 import type { GenealogyGraphRepository } from '../../infrastructure/repositories/genealogy-graph.repository';
 
 /**
@@ -91,15 +91,9 @@ export class GetPersonHistoryHandler {
       throw new Error(`Person not found: ${query.personId}`);
     }
 
-    // Fetch all activity entries for this tree
-    const allEntries = await this.getActivityEntries(query.treeId);
-
-    // Filter to entries relevant to this person
-    const relevantEntries = this.filterPersonHistory(allEntries, query.personId);
-    const total = relevantEntries.length;
-
-    // Apply pagination
-    const entries = relevantEntries.slice(offset, offset + limit);
+    const page = await this.auditLogRepository.findByPerson(query.treeId, query.personId, limit, offset);
+    const entries = page.entries;
+    const total = page.total;
 
     return {
       treeId: query.treeId,
@@ -112,34 +106,4 @@ export class GetPersonHistoryHandler {
     };
   }
 
-  /**
-   * Fetch all activity entries for tree
-   * 
-   * @internal
-   * Currently in-memory. Replace with repository query in production.
-   */
-  private async getActivityEntries(treeId: string): Promise<AuditLogEntry[]> {
-    // TODO: Query from auditLogRepository with index on treeId
-    // For now, return empty array (actual audit logging to be added)
-    return [];
-  }
-
-  /**
-   * Filter activity entries to those relevant to a specific person
-   * 
-   * Heuristic: An entry is relevant if:
-   * - The action string contains the person ID, OR
-   * - The entry is tagged with personId (when metadata available)
-   * 
-   * @internal
-   * Production: Use structured action metadata instead of string parsing
-   */
-  private filterPersonHistory(entries: AuditLogEntry[], personId: string): AuditLogEntry[] {
-    // TODO: Implement structured filtering once action metadata is available
-    // For now, heuristic-based filtering on action string
-    return entries.filter((entry) => {
-      // Include if action mentions this person ID
-      return entry.action.includes(personId);
-    });
-  }
 }

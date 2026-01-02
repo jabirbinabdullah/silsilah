@@ -6,6 +6,8 @@ import { AuthController } from './presentation/controllers/auth.controller';
 import { PublicController } from './presentation/controllers/public.controller';
 import { HealthController } from './presentation/controllers/health.controller';
 import { GenealogyApplicationService } from './application/services/genealogy-application.service';
+import { GetTreeActivityHandler } from './application/queries/get-tree-activity.query';
+import { GetPersonHistoryHandler } from './application/queries/get-person-history.query';
 import { MongoGenealogyGraphRepository } from './infrastructure/repositories/genealogy-graph.mongo.repository';
 import { MongoUserRepository } from './infrastructure/repositories/user.mongo.repository';
 import { MongoAuditLogRepository } from './infrastructure/repositories/audit-log.mongo.repository';
@@ -112,6 +114,22 @@ const authServiceProvider = {
   },
 };
 
+const getTreeActivityHandlerProvider = {
+  provide: GetTreeActivityHandler,
+  useFactory: (auditLogRepository: any, readRepository: any) => {
+    return new GetTreeActivityHandler(auditLogRepository, readRepository);
+  },
+  inject: ['AUDIT_LOG_REPOSITORY', 'READ_GENEALOGY_REPOSITORY'],
+};
+
+const getPersonHistoryHandlerProvider = {
+  provide: GetPersonHistoryHandler,
+  useFactory: (auditLogRepository: any, readRepository: any) => {
+    return new GetPersonHistoryHandler(auditLogRepository, readRepository);
+  },
+  inject: ['AUDIT_LOG_REPOSITORY', 'READ_GENEALOGY_REPOSITORY'],
+};
+
 // Application service provider
 const appServiceProvider = {
   provide: GenealogyApplicationService,
@@ -137,6 +155,8 @@ const appServiceProvider = {
     userRepositoryProvider,
     auditLogRepositoryProvider,
     authServiceProvider,
+    getTreeActivityHandlerProvider,
+    getPersonHistoryHandlerProvider,
     appServiceProvider,
     // Conditionally enable global JWT guard via env toggle
     {

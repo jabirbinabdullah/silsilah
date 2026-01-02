@@ -81,17 +81,24 @@ export class GenealogyApplicationService {
     }
   }
 
-  private async appendAudit(action: string, treeId: string): Promise<void> {
+  private async appendAudit(
+    action: string,
+    treeId: string,
+    metadata?: { personId?: string; personIds?: string[]; details?: Record<string, unknown> },
+  ): Promise<void> {
     if (!this.auditLogRepository) return;
 
     const user = this.userContext;
     const entry = {
       treeId,
+      personId: metadata?.personId,
+      personIds: metadata?.personIds,
       action,
       userId: user?.userId ?? 'anonymous',
       username: user?.username ?? 'anonymous',
       role: user?.role ?? 'UNKNOWN',
       timestamp: new Date(),
+      details: metadata?.details,
     } as const;
 
     try {
@@ -159,42 +166,60 @@ export class GenealogyApplicationService {
   async handleAddPersonToTree(cmd: AddPersonToTreeCommand) {
     this.requireMutation();
     const result = await this.addPersonToTree.execute(cmd);
-    await this.appendAudit('CREATE_PERSON', cmd.treeId);
+    await this.appendAudit('CREATE_PERSON', cmd.treeId, {
+      personId: cmd.personId,
+      details: { name: cmd.name, gender: cmd.gender },
+    });
     return result;
   }
 
   async handleEstablishParentChild(cmd: EstablishParentChildCommand) {
     this.requireMutation();
     const result = await this.establishParentChild.execute(cmd);
-    await this.appendAudit('ESTABLISH_PARENT_CHILD', cmd.treeId);
+    await this.appendAudit('ESTABLISH_PARENT_CHILD', cmd.treeId, {
+      personId: cmd.childId,
+      personIds: [cmd.parentId, cmd.childId],
+      details: { parentId: cmd.parentId, childId: cmd.childId },
+    });
     return result;
   }
 
   async handleEstablishSpouse(cmd: EstablishSpouseCommand) {
     this.requireMutation();
     const result = await this.establishSpouse.execute(cmd);
-    await this.appendAudit('ESTABLISH_SPOUSE', cmd.treeId);
+    await this.appendAudit('ESTABLISH_SPOUSE', cmd.treeId, {
+      personIds: [cmd.spouseAId, cmd.spouseBId],
+      details: { spouseAId: cmd.spouseAId, spouseBId: cmd.spouseBId },
+    });
     return result;
   }
 
   async handleRemoveRelationship(cmd: RemoveRelationshipCommand) {
     this.requireMutation();
     const result = await this.removeRelationship.execute(cmd);
-    await this.appendAudit('REMOVE_RELATIONSHIP', cmd.treeId);
+    await this.appendAudit('REMOVE_RELATIONSHIP', cmd.treeId, {
+      personIds: [cmd.personId1, cmd.personId2],
+      details: { personId1: cmd.personId1, personId2: cmd.personId2 },
+    });
     return result;
   }
 
   async handleRemovePerson(cmd: RemovePersonCommand) {
     this.requireOwner();
     const result = await this.removePerson.execute(cmd);
-    await this.appendAudit('REMOVE_PERSON', cmd.treeId);
+    await this.appendAudit('REMOVE_PERSON', cmd.treeId, {
+      personId: cmd.personId,
+      details: { personId: cmd.personId },
+    });
     return result;
   }
 
   async handleImportPersons(cmd: ImportPersonsCommand): Promise<ImportPersonsResult> {
     this.requireMutation(); // EDITOR or OWNER
     const result = await this.importPersons.execute(cmd);
-    await this.appendAudit('IMPORT_PERSONS', cmd.treeId);
+    await this.appendAudit('IMPORT_PERSONS', cmd.treeId, {
+      details: { imported: result.imported, total: result.total },
+    });
     return result;
   }
 

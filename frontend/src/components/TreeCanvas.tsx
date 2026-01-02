@@ -642,38 +642,78 @@ export const TreeCanvas = forwardRef<TreeCanvasRef, TreeCanvasProps>(({
       const g = svg.append('g').attr('class', 'main-group');
 
       const edgesGroup = g.append('g').attr('class', 'edges');
-      const edges = edgesGroup
-        .attr('stroke-opacity', 0.7)
-        .selectAll('line')
-        .data(layoutEdges)
-        .join('line')
-        .attr('stroke-width', (d) => (relatedEdgeIds.has(d.id) ? 2.8 : 1.6))
-        .attr('stroke', (d) => (d.type === 'spouse' ? 'var(--bs-info)' : 'var(--bs-secondary)'))
-        .attr('stroke-dasharray', (d) => (String(d.type).includes('step') ? '4 2' : null))
-        .attr('opacity', (d) => (!selectedPersonId || relatedEdgeIds.has(d.id) ? 1 : 0.2))
-        .attr('cursor', 'pointer')
-        .on('mouseover', function (_, d) {
-          d3.select(this).attr('stroke-width', (relatedEdgeIds.has(d.id) ? 3.2 : 2.4));
-        })
-        .on('mouseout', function (_, d) {
-          d3.select(this).attr('stroke-width', (relatedEdgeIds.has(d.id) ? 2.8 : 1.6));
-        })
-        .on('click', (_, d) => {
-          if (onEdgeClick) onEdgeClick(d);
-        });
-
-      edges
-        .append('title')
-        .text((d: any) => {
-          const t = String(d.type || 'relationship');
-          return t === 'parent-child' ? 'Biological Parent–Child' : t === 'spouse' ? 'Marriage' : t.replace('-', ' ');
-        });
-
-      const nodes = g
+      const nodesGroup = g
         .append('g')
-        .selectAll('circle')
+        .selectAll('g.node')
         .data(layoutNodes)
-        .join('circle')
+        .join('g')
+        .attr('class', 'node')
+        .attr('transform', (d) => `translate(${d.x ?? 0}, ${d.y ?? 0})`)
+        .attr('cursor', 'pointer')
+        .attr('tabindex', '0')
+        .attr('role', 'button')
+        .attr('aria-label', (d) => d.displayName)
+        .on('click', (_, d) => onNodeClick(d.id))
+        .on('keydown', (event, d) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onNodeClick(d.id);
+          }
+        })
+        .each(function () {
+          // Touch event handling for mobile
+          let touchStartTime = 0;
+          let touchStartPos = { x: 0, y: 0 };
+          let longPressTimer: number | null = null;
+
+          d3.select(this)
+            .on('touchstart', (event, d: any) => {
+              event.preventDefault();
+              touchStartTime = Date.now();
+              const touch = event.touches[0];
+              touchStartPos = { x: touch.clientX, y: touch.clientY };
+
+              // Start a timer for long press
+              if (longPressTimer) clearTimeout(longPressTimer);
+              longPressTimer = window.setTimeout(() => {
+                longPressTimer = null;
+                const svgRect = svgRef.current!.getBoundingClientRect();
+                setContextMenu({
+                  x: (d.x ?? 0) - svgRect.left,
+                  y: (d.y ?? 0) - svgRect.top,
+                  nodeId: d.id,
+                });
+              }, 500);
+            })
+            .on('touchmove', (event) => {
+              // If finger moves, it's a pan, not a long press or tap
+              if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+              }
+            })
+            .on('touchend', (event, d: any) => {
+              // Clear the long press timer
+              if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+              }
+
+              const touch = event.changedTouches[0];
+              const dist = Math.sqrt(
+                Math.pow(touch.clientX - touchStartPos.x, 2) +
+                Math.pow(touch.clientY - touchStartPos.y, 2)
+              );
+              
+              // If touch moved less than 10px and was less than 300ms, treat as a tap
+              if (dist < 10 && Date.now() - touchStartTime < 300) {
+                onNodeClick(d.id);
+              }
+            });
+        });
+
+      nodesGroup
+        .append('circle')
         .attr('r', 8)
         .attr('fill', (d) =>
           directRelativeIds && (directRelativeIds.has(d.id) || d.id === selectedPersonId)
@@ -685,22 +725,20 @@ export const TreeCanvas = forwardRef<TreeCanvasRef, TreeCanvasProps>(({
         .attr('opacity', (d) => {
           if (!selectedPersonId) return 1;
           return d.id === selectedPersonId || (directRelativeIds && directRelativeIds.has(d.id)) ? 1 : 0.35;
-        })
-        .attr('cursor', 'pointer')
-        .on('click', (_, d) => onNodeClick(d.id));
+        });
 
-      const labels = g
-        .append('g')
-        .selectAll('text')
-        .data(layoutNodes)
-        .join('text')
+      nodesGroup
+        .append('text')
         .attr('text-anchor', 'middle')
+        .attr('y', -12)
         .attr('font-size', '10px')
         .attr('font-weight', (d) => (d.id === selectedPersonId ? 'bold' : 'normal'))
         .attr('fill', '#333')
         .attr('pointer-events', 'none')
         .style('user-select', 'none')
         .text((d) => d.displayName);
+
+      const labels = nodesGroup.select('text'); // This is just for positioning below, no rendering
 
       // Manually set initial positions after simulation has run
       edges
@@ -732,9 +770,10 @@ export const TreeCanvas = forwardRef<TreeCanvasRef, TreeCanvasProps>(({
         .attr('stroke-width', 1.6)
         .attr('transform', 'translate(6,0)');
 
-      nodes.attr('cx', (d) => d.x ?? 0).attr('cy', (d) => d.y ?? 0);
+      // nodesGroup is already translated, so circles and text are relative to 0,0
+      // nodes.attr('cx', (d) => d.x ?? 0).attr('cy', (d) => d.y ?? 0);
+      // labels.attr('x', (d) => d.x ?? 0).attr('y', (d) => (d.y ?? 0) - 12);
 
-      labels.attr('x', (d) => d.x ?? 0).attr('y', (d) => (d.y ?? 0) - 12);
 
       // Add expand/collapse toggles for parent nodes
       const parentNodesData = layoutNodes.filter(d => parentNodes.has(d.id));
@@ -865,6 +904,8 @@ export const TreeCanvas = forwardRef<TreeCanvasRef, TreeCanvasProps>(({
           width: '100%',
           height: '100%',
         }}
+        tabIndex={0}
+        aria-label="Family tree visualization"
       />
       {contextMenu && (
         <div

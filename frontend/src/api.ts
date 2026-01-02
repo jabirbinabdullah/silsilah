@@ -433,29 +433,48 @@ export async function deletePerson(
 // AUDIT & ACTIVITY LOG APIs
 // ============================================================================
 
+export interface AuditEvent {
+  id: string;
+  timestamp: string;
+  action: string;
+  actor: {
+    userId: string;
+    username: string;
+    role: 'OWNER' | 'EDITOR' | 'VIEWER' | 'UNKNOWN' | string;
+  };
+  treeId: string;
+  details?: Record<string, any>;
+}
+
+export interface PaginatedAuditResponse {
+  entries: AuditEvent[];
+  total: number;
+}
+
 /**
  * Fetch tree activity log (paginated)
- * 
- * Returns raw backend audit entries, optionally transformed to UI-ready DTOs.
- * 
+ *
+ * Returns raw backend audit entries.
+ *
  * @param treeId Tree to fetch activity for
- * @param options Pagination and transformation options
+ * @param page The page number for pagination.
+ * @param limit The number of items per page.
  * @returns Paginated tree activity feed
  */
-export async function getTreeActivityLog(
+export async function getTreeActivity(
   treeId: string,
-  options?: { limit?: number; offset?: number }
-): Promise<{ entries: any[]; total: number }> {
+  page: number = 1,
+  limit: number = 50
+): Promise<PaginatedAuditResponse> {
   const base = getBaseUrl();
   const token = getAuthToken();
-  const limit = options?.limit ?? 50;
-  const offset = options?.offset ?? 0;
-  
+  const offset = (page - 1) * limit;
+
   const queryParams = new URLSearchParams({
     limit: String(limit),
     offset: String(offset),
   });
-  
+
   return httpJson(
     `${base}/api/trees/${encodeURIComponent(treeId)}/activity?${queryParams}`,
     {
@@ -469,32 +488,34 @@ export async function getTreeActivityLog(
 
 /**
  * Fetch person change history (paginated)
- * 
+ *
  * Fetches all changes related to a specific person in a tree.
- * Backend filters entries that mention the person ID in the action string.
- * 
+ *
  * @param treeId Tree to fetch activity for
  * @param personId Person to filter by
- * @param options Pagination options
+ * @param page The page number for pagination.
+ * @param limit The number of items per page.
  * @returns Paginated person change history
  */
-export async function getPersonChangeHistory(
+export async function getPersonHistory(
   treeId: string,
   personId: string,
-  options?: { limit?: number; offset?: number }
-): Promise<{ entries: any[]; total: number }> {
+  page: number = 1,
+  limit: number = 50
+): Promise<PaginatedAuditResponse> {
   const base = getBaseUrl();
   const token = getAuthToken();
-  const limit = options?.limit ?? 50;
-  const offset = options?.offset ?? 0;
-  
+  const offset = (page - 1) * limit;
+
   const queryParams = new URLSearchParams({
     limit: String(limit),
     offset: String(offset),
   });
-  
+
   return httpJson(
-    `${base}/api/trees/${encodeURIComponent(treeId)}/persons/${encodeURIComponent(personId)}/history?${queryParams}`,
+    `${base}/api/trees/${encodeURIComponent(
+      treeId
+    )}/persons/${encodeURIComponent(personId)}/history?${queryParams}`,
     {
       method: 'GET',
       headers: {

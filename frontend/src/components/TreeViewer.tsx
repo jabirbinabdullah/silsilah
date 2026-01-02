@@ -30,8 +30,6 @@ function Toolbar({
   onAddRelationship,
   viewMode, 
   onChangeView,
-  searchQuery,
-  onSearchChange,
   onZoomIn,
   onZoomOut,
   onZoomReset,
@@ -57,8 +55,6 @@ function Toolbar({
   onAddRelationship: () => void;
   viewMode: ViewMode; 
   onChangeView: (m: ViewMode) => void;
-  searchQuery: string;
-  onSearchChange: (q: string) => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onZoomReset: () => void;
@@ -106,14 +102,6 @@ function Toolbar({
           <h4 className="mb-0 text-muted">
             Tree: <span className="fw-bold text-dark">{treeId}</span>
           </h4>
-          <input
-            type="text"
-            className="form-control"
-            placeholder="Search person..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            style={{ width: '240px' }}
-          />
         </div>
         <div className="d-flex align-items-center gap-2">
           {showZoomControls && (
@@ -400,7 +388,6 @@ export function TreeViewer() {
   const [selectedEdge, setSelectedEdge] = useState<RenderEdgeData | null>(null);
   const [editDrawerOpen, setEditDrawerOpen] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>('network');
-  const [searchQuery, setSearchQuery] = useState('');
   const [workerModeOverride, setWorkerModeOverride] = useState<'auto' | 'force-on' | 'force-off'>('auto');
   const [currentDetailLevel, setCurrentDetailLevel] = useState<'low' | 'medium' | 'high'>('high');
   const [layoutOrientation, setLayoutOrientation] = useState<'vertical' | 'horizontal'>(() => {
@@ -608,64 +595,6 @@ export function TreeViewer() {
     calculateStats();
   }, [data]);
 
-  const { parents, children, spouses, relatedEdgeIds } = useMemo(() => {
-    if (!data || !selectedPersonId) {
-      return {
-        parents: [],
-        children: [],
-        spouses: [],
-        relatedEdgeIds: new Set<string>(),
-      };
-    }
-    const nodeIds = new Set(data.nodes.map((n) => n.id));
-    const nodeMap = new Map(data.nodes.map((n) => [n.id, n]));
-
-    const parentOf = new Set<string>();
-    const childOf = new Set<string>();
-    const spouseOf = new Set<string>();
-    const relatedEdges = new Set<string>();
-
-    data.edges.forEach((edge) => {
-      if (edge.type === 'parent-child') {
-        if (edge.target === selectedPersonId && nodeIds.has(edge.source)) {
-          parentOf.add(edge.source);
-          relatedEdges.add(edge.id);
-        }
-        if (edge.source === selectedPersonId && nodeIds.has(edge.target)) {
-          childOf.add(edge.target);
-          relatedEdges.add(edge.id);
-        }
-      }
-      if (edge.type === 'spouse') {
-        if (edge.source === selectedPersonId && nodeIds.has(edge.target)) {
-          spouseOf.add(edge.target);
-          relatedEdges.add(edge.id);
-        }
-        if (edge.target === selectedPersonId && nodeIds.has(edge.source)) {
-          spouseOf.add(edge.source);
-          relatedEdges.add(edge.id);
-        }
-      }
-    });
-
-    const toFamilyNode = (id: string): FamilyNode | undefined => {
-      const node = nodeMap.get(id);
-      return node ? { personId: node.id, displayName: node.displayName } : undefined;
-    };
-
-    return {
-      parents: Array.from(parentOf).map(toFamilyNode).filter(Boolean) as FamilyNode[],
-      children: Array.from(childOf).map(toFamilyNode).filter(Boolean) as FamilyNode[],
-      spouses: Array.from(spouseOf).map(toFamilyNode).filter(Boolean) as FamilyNode[],
-      relatedEdgeIds: relatedEdges,
-    };
-  }, [data, selectedPersonId]);
-
-  const filteredNodes = useMemo(() => {
-    if (!data || !searchQuery.trim()) return data?.nodes || [];
-    const query = searchQuery.toLowerCase();
-    return data.nodes.filter((n) => n.displayName.toLowerCase().includes(query));
-  }, [data, searchQuery]);
   const directRelativeIds = useMemo(() => {
     const set = new Set<string>();
     if (selectedPersonId) set.add(selectedPersonId);
@@ -683,27 +612,6 @@ export function TreeViewer() {
   const handleSetRoot = useCallback((personId: string) => {
     setSelectedPersonId(personId);
   }, []);
-
-  const handleZoomIn = useCallback(() => {
-    hierarchicalCanvasRef.current?.zoomIn();
-  }, []);
-
-  const handleZoomOut = useCallback(() => {
-    hierarchicalCanvasRef.current?.zoomOut();
-  }, []);
-
-  const handleZoomReset = useCallback(() => {
-    hierarchicalCanvasRef.current?.zoomReset();
-  }, []);
-
-  const handleSearch = useCallback((query: string) => {
-    setSearchQuery(query);
-    if (query.trim() && filteredNodes.length > 0) {
-      const firstMatch = filteredNodes[0];
-      setSelectedPersonId(firstMatch.id);
-      hierarchicalCanvasRef.current?.centerOnNode(firstMatch.id);
-    }
-  }, [filteredNodes]);
 
   const handleExportSVG = useCallback(() => {
     const timestamp = new Date().toISOString().slice(0, 10);
@@ -748,8 +656,6 @@ export function TreeViewer() {
         }}
         viewMode={viewMode}
         onChangeView={setViewMode}
-        searchQuery={searchQuery}
-        onSearchChange={handleSearch}
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
         onZoomReset={handleZoomReset}
@@ -869,6 +775,19 @@ export function TreeViewer() {
                   </li>
                   <li className="nav-item" role="presentation">
                     <button
+                      className={`nav-link ${!showStatistics && sidebarTab === 'search' ? 'active' : ''}`}
+                      onClick={() => {
+                        setShowStatistics(false);
+                        setSidebarTab('search');
+                      }}
+                      role="tab"
+                      aria-selected={!showStatistics && sidebarTab === 'search'}
+                    >
+                      🔍 Search
+                    </button>
+                  </li>
+                  <li className="nav-item" role="presentation">
+                    <button
                       className={`nav-link ${!showStatistics && sidebarTab === 'activity' ? 'active' : ''}`}
                       onClick={() => {
                         setShowStatistics(false);
@@ -902,6 +821,15 @@ export function TreeViewer() {
                       statistics={statistics}
                       treeName={treeId}
                       isLoading={statisticsLoading}
+                    />
+                  </div>
+                ) : sidebarTab === 'search' ? (
+                  <div className="flex-grow-1 overflow-auto">
+                    <PersonSearch
+                      nodes={data.nodes}
+                      edges={data.edges}
+                      currentPersonId={selectedPersonId || data.nodes[0]?.id || ''}
+                      onSelect={(personId) => setSelectedPersonId(personId)}
                     />
                   </div>
                 ) : sidebarTab === 'activity' ? (

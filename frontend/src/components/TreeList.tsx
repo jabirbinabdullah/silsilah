@@ -169,8 +169,17 @@ export function TreeList() {
       <div className="row">
         <div className="col-lg-12">
           <div className="card shadow-sm mb-4">
-            <div className="card-header">
+            <div className="card-header d-flex justify-content-between align-items-center">
               <h5 className="card-title mb-0">Actions</h5>
+              <button
+                className="btn btn-sm btn-outline-primary"
+                onClick={() => {
+                  setSelectedTree(null);
+                  setImportModalOpen(true);
+                }}
+              >
+                📥 Import Tree
+              </button>
             </div>
             <div className="card-body">
               <div className="mb-3">
@@ -261,7 +270,7 @@ export function TreeList() {
       <div className="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
         {trees.map((t) => (
           <div key={t.treeId} className="col">
-            <div className="card h-100 shadow-sm hover-shadow" style={{ position: 'relative' }}>
+            <div className="card h-100 shadow-sm hover-shadow" style={{ position: 'relative' }} aria-label={`Family tree card for ${t.name}`}>
               {/* Menu Button */}
               <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', zIndex: 10 }}>
                 <TreeCardMenu
@@ -340,12 +349,14 @@ export function TreeList() {
                   <Link
                     to={`/trees/${encodeURIComponent(t.treeId)}`}
                     className="btn btn-primary btn-sm"
+                    aria-label={`Open tree ${t.name}`}
                   >
                     Open
                   </Link>
                   <Link
                     to={`/trees/${encodeURIComponent(t.treeId)}/settings`}
                     className="btn btn-outline-secondary btn-sm"
+                    aria-label={`Settings for tree ${t.name}`}
                   >
                     Settings
                   </Link>
