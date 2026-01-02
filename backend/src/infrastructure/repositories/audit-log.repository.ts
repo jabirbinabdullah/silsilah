@@ -21,5 +21,4 @@ export interface AuditLogPage {
 export interface AuditLogRepository {
   append(entry: AuditLogEntry): Promise<void>;
   findByTree(treeId: string, limit: number, offset: number): Promise<AuditLogPage>;
-  findByPerson(treeId: string, personId: string, limit: number, offset: number): Promise<AuditLogPage>;
-}
+  findByPerson(treeId: string, personId: string, limit: number, offset: number): Promise<AuditLogPage>;  ensureIndexes(): Promise<void>;}

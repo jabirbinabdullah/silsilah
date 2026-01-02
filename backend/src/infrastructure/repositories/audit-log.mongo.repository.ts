@@ -21,6 +21,42 @@ export class MongoAuditLogRepository implements AuditLogRepository {
     this.collection = mongoClient.db(dbName).collection<AuditLogDocument>('audit_logs');
   }
 
+  /**
+   * Ensure required indexes exist on the audit_logs collection.
+   * This method is idempotent and safe to call multiple times.
+   * 
+   * Indexes created:
+   * - { treeId: 1, timestamp: -1 }: Supports tree activity queries
+   * - { personId: 1, timestamp: -1 }: Supports person history queries
+   */
+  async ensureIndexes(): Promise<void> {
+    const requiredIndexes: Array<{ spec: Record<string, 1 | -1>; name: string; description: string }> = [
+      {
+        spec: { treeId: 1, timestamp: -1 },
+        name: 'idx_treeId_timestamp',
+        description: 'Tree activity queries (sorted by recency)',
+      },
+      {
+        spec: { personId: 1, timestamp: -1 },
+        name: 'idx_personId_timestamp',
+        description: 'Person history queries (sorted by recency)',
+      },
+    ];
+
+    for (const { spec, name, description } of requiredIndexes) {
+      try {
+        await this.collection.createIndex(spec as any, { name });
+        console.log(`[AUDIT] Repository: Index ensured: ${name} - ${description}`);
+      } catch (err) {
+        if ((err as any).codeName === 'IndexAlreadyExists') {
+          console.log(`[AUDIT] Repository: Index already exists: ${name}`);
+        } else {
+          console.warn(`[AUDIT] Repository: Failed to create index ${name}:`, err);
+        }
+      }
+    }
+  }
+
   async append(entry: AuditLogEntry): Promise<void> {
     const doc: AuditLogDocument = {
       treeId: entry.treeId,
