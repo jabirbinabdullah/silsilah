@@ -20,10 +20,10 @@ import {
   transformActivityFeed,
   transformPersonChangeHistory,
 } from '../adapters/auditTransformer';
+import { buildPaginationMeta, resolvePagination } from '../utils/pagination';
 import {
   getTreeActivity as apiGetTreeActivity,
   getPersonHistory as apiGetPersonHistory,
-  AuditEvent,
 } from '../api';
 
 /**
@@ -41,7 +41,8 @@ export async function fetchTreeActivityFeed(
   limit: number = 50
 ): Promise<TreeActivityFeed> {
   try {
-    const response = await apiGetTreeActivity(treeId, page, limit);
+    const { limit: safeLimit } = resolvePagination(page, limit);
+    const response = await apiGetTreeActivity(treeId, page, safeLimit);
 
     if (!Array.isArray(response.entries) || typeof response.total !== 'number') {
       throw new Error('Invalid activity log response structure');
@@ -51,17 +52,11 @@ export async function fetchTreeActivityFeed(
       response.entries as any
     );
 
-    const offset = (page - 1) * limit;
-
     return {
       treeId,
       entries,
       total: response.total,
-      pagination: {
-        limit,
-        offset,
-        hasMore: offset + entries.length < response.total,
-      },
+      pagination: buildPaginationMeta(response.total, page, safeLimit, entries.length),
     };
   } catch (error) {
     console.error(`Failed to fetch tree activity for ${treeId}:`, error);
@@ -94,7 +89,8 @@ export async function fetchPersonChangeHistory(
   }
 
   try {
-    const response = await apiGetPersonHistory(treeId, personId, page, limit);
+    const { limit: safeLimit } = resolvePagination(page, limit);
+    const response = await apiGetPersonHistory(treeId, personId, page, safeLimit);
 
     if (!Array.isArray(response.entries) || typeof response.total !== 'number') {
       throw new Error('Invalid activity log response structure');
@@ -104,18 +100,12 @@ export async function fetchPersonChangeHistory(
       response.entries as any
     );
 
-    const offset = (page - 1) * limit;
-
     return {
       treeId,
       personId,
       entries: allEntries,
       total: response.total,
-      pagination: {
-        limit,
-        offset,
-        hasMore: offset + allEntries.length < response.total,
-      },
+      pagination: buildPaginationMeta(response.total, page, safeLimit, allEntries.length),
     };
   } catch (error) {
     console.error(`Failed to fetch person history for ${personId}:`, error);

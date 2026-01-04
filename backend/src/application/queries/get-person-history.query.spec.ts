@@ -15,6 +15,10 @@ import type { GenealogyGraphRepository } from '../../infrastructure/repositories
 
 // Mock repositories
 class MockAuditLogRepository implements AuditLogRepository {
+  async ensureIndexes(): Promise<void> {
+    // No-op for tests
+  }
+
   async append(entry: AuditLogEntry): Promise<void> {
     // No-op for query tests
   }

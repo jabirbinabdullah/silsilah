@@ -7,6 +7,7 @@ import {
   InvariantViolationError,
 } from '../../domain/errors';
 import type { AuditLogRepository, GenealogyGraphRepository } from '../../infrastructure/repositories';
+import { AuditAction } from '../../domain/constants/audit-actions';
 import { CreateFamilyTreeHandler, type CreateFamilyTreeCommand } from '../commands/create-family-tree.command';
 import { AddPersonToTreeHandler, type AddPersonToTreeCommand } from '../commands/add-person-to-tree.command';
 import { EstablishParentChildHandler, type EstablishParentChildCommand } from '../commands/establish-parent-child.command';
@@ -82,7 +83,7 @@ export class GenealogyApplicationService {
   }
 
   private async appendAudit(
-    action: string,
+    action: AuditAction,
     treeId: string,
     metadata?: { personId?: string; personIds?: string[]; details?: Record<string, unknown> },
   ): Promise<void> {
@@ -159,14 +160,14 @@ export class GenealogyApplicationService {
   async handleCreateFamilyTree(cmd: CreateFamilyTreeCommand) {
     this.requireMutation();
     const result = await this.createFamilyTree.execute(cmd);
-    await this.appendAudit('CREATE_FAMILY_TREE', cmd.treeId);
+    await this.appendAudit(AuditAction.CREATE_FAMILY_TREE, cmd.treeId);
     return result;
   }
 
   async handleAddPersonToTree(cmd: AddPersonToTreeCommand) {
     this.requireMutation();
     const result = await this.addPersonToTree.execute(cmd);
-    await this.appendAudit('CREATE_PERSON', cmd.treeId, {
+    await this.appendAudit(AuditAction.CREATE_PERSON, cmd.treeId, {
       personId: cmd.personId,
       details: { name: cmd.name, gender: cmd.gender },
     });
@@ -176,7 +177,7 @@ export class GenealogyApplicationService {
   async handleEstablishParentChild(cmd: EstablishParentChildCommand) {
     this.requireMutation();
     const result = await this.establishParentChild.execute(cmd);
-    await this.appendAudit('ESTABLISH_PARENT_CHILD', cmd.treeId, {
+    await this.appendAudit(AuditAction.ESTABLISH_PARENT_CHILD, cmd.treeId, {
       personId: cmd.childId,
       personIds: [cmd.parentId, cmd.childId],
       details: { parentId: cmd.parentId, childId: cmd.childId },
@@ -187,7 +188,7 @@ export class GenealogyApplicationService {
   async handleEstablishSpouse(cmd: EstablishSpouseCommand) {
     this.requireMutation();
     const result = await this.establishSpouse.execute(cmd);
-    await this.appendAudit('ESTABLISH_SPOUSE', cmd.treeId, {
+    await this.appendAudit(AuditAction.ESTABLISH_SPOUSE, cmd.treeId, {
       personIds: [cmd.spouseAId, cmd.spouseBId],
       details: { spouseAId: cmd.spouseAId, spouseBId: cmd.spouseBId },
     });
@@ -197,7 +198,7 @@ export class GenealogyApplicationService {
   async handleRemoveRelationship(cmd: RemoveRelationshipCommand) {
     this.requireMutation();
     const result = await this.removeRelationship.execute(cmd);
-    await this.appendAudit('REMOVE_RELATIONSHIP', cmd.treeId, {
+    await this.appendAudit(AuditAction.REMOVE_RELATIONSHIP, cmd.treeId, {
       personIds: [cmd.personId1, cmd.personId2],
       details: { personId1: cmd.personId1, personId2: cmd.personId2 },
     });
@@ -207,7 +208,7 @@ export class GenealogyApplicationService {
   async handleRemovePerson(cmd: RemovePersonCommand) {
     this.requireOwner();
     const result = await this.removePerson.execute(cmd);
-    await this.appendAudit('REMOVE_PERSON', cmd.treeId, {
+    await this.appendAudit(AuditAction.REMOVE_PERSON, cmd.treeId, {
       personId: cmd.personId,
       details: { personId: cmd.personId },
     });
@@ -217,7 +218,7 @@ export class GenealogyApplicationService {
   async handleImportPersons(cmd: ImportPersonsCommand): Promise<ImportPersonsResult> {
     this.requireMutation(); // EDITOR or OWNER
     const result = await this.importPersons.execute(cmd);
-    await this.appendAudit('IMPORT_PERSONS', cmd.treeId, {
+    await this.appendAudit(AuditAction.IMPORT_PERSONS, cmd.treeId, {
       details: { imported: result.imported, total: result.total },
     });
     return result;
@@ -510,7 +511,7 @@ export class GenealogyApplicationService {
 
     const updatedMembers: Member[] = [...ownership.members, { userId, role }];
     await (this.repository as any).updateOwnership(treeId, ownership.ownerId, updatedMembers);
-    await this.appendAudit('ADD_MEMBER', treeId);
+    await this.appendAudit(AuditAction.ADD_MEMBER, treeId);
   }
 
   /**
@@ -546,7 +547,7 @@ export class GenealogyApplicationService {
     }
 
     await (this.repository as any).updateOwnership(treeId, ownership.ownerId, updatedMembers);
-    await this.appendAudit('REMOVE_MEMBER', treeId);
+    await this.appendAudit(AuditAction.REMOVE_MEMBER, treeId);
   }
 
   /**
@@ -594,7 +595,7 @@ export class GenealogyApplicationService {
       await (this.repository as any).updateOwnership(treeId, ownership.ownerId, updatedMembers);
     }
 
-    await this.appendAudit('CHANGE_MEMBER_ROLE', treeId);
+    await this.appendAudit(AuditAction.CHANGE_MEMBER_ROLE, treeId);
   }
 
   /**
@@ -641,6 +642,6 @@ export class GenealogyApplicationService {
     }
 
     await (this.repository as any).updateOwnership(treeId, newOwnerId, updatedMembers);
-    await this.appendAudit('TRANSFER_OWNERSHIP', treeId);
+    await this.appendAudit(AuditAction.TRANSFER_OWNERSHIP, treeId);
   }
 }

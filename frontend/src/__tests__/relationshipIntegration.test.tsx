@@ -2,8 +2,7 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RelationshipManager } from '../components/RelationshipManager';
-import { server } from '../test/testServer';
-import { http, HttpResponse } from 'msw';
+import { GenealogyCommandBus } from '../commands/genealogyCommands';
 
 
 import { vi } from 'vitest';
@@ -35,7 +34,18 @@ describe('RelationshipManager Integration', () => {
   };
 
   beforeEach(() => {
+    vi.restoreAllMocks();
     vi.clearAllMocks();
+
+    vi.spyOn(GenealogyCommandBus, 'addParentChildRelationship').mockResolvedValue({
+      success: true,
+      data: { message: 'ok' },
+    });
+
+    vi.spyOn(GenealogyCommandBus, 'addPerson').mockResolvedValue({
+      success: true,
+      data: { personId: 'generated-person' },
+    });
   });
 
   test('adds a parent relationship successfully', async () => {
@@ -81,12 +91,11 @@ describe('RelationshipManager Integration', () => {
   });
 
   test('creates new person and links as spouse', async () => {
-    // Mock createPerson API
-    server.use(
-      http.post('http://localhost:3000/trees/:treeId/persons', async () => {
-        return HttpResponse.json({ personId: 'new-spouse' }, { status: 200 });
-      })
-    );
+    // Ensure person creation returns expected ID
+    (GenealogyCommandBus.addPerson as vi.Mock).mockResolvedValueOnce({
+      success: true,
+      data: { personId: 'new-spouse' },
+    });
 
     render(<RelationshipManager {...baseProps} />);
 
@@ -117,12 +126,10 @@ describe('RelationshipManager Integration', () => {
   });
 
   test('handles API error gracefully', async () => {
-    // Mock error response
-    server.use(
-      http.post('http://localhost:3000/trees/:treeId/relationships/parent-child', () => {
-        return new HttpResponse('Server Error', { status: 500 });
-      })
-    );
+    (GenealogyCommandBus.addParentChildRelationship as vi.Mock).mockResolvedValueOnce({
+      success: false,
+      error: 'Server is having trouble. Please try again shortly.',
+    });
 
     render(<RelationshipManager {...baseProps} />);
     

@@ -9,6 +9,7 @@ describe('CSV Bulk Import (Priority C)', () => {
   let client: MongoClient;
   const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017';
   const dbName = process.env.MONGODB_DB_NAME || 'silsilah';
+  const apiBase = '/api/trees';
   let treeId: string;
 
   beforeAll(async () => {
@@ -72,7 +73,7 @@ person-2,Bob Jones,MALE,1965-08-20,New York,2020-01-01
 person-3,Carol Wilson,UNKNOWN,1970-03-10,Paris,`;
 
       const response = await request(app.getHttpServer())
-        .post(`/trees/${treeId}/persons/import`)
+        .post(`${apiBase}/${treeId}/persons/import`)
         .send({ csvContent })
         .expect(HttpStatus.CREATED);
 
@@ -96,7 +97,7 @@ existing-person,John Changed Name,MALE,1950-01-01,,
 new-person,Jane Doe,FEMALE,1975-06-20,,`;
 
       const response = await request(app.getHttpServer())
-        .post(`/trees/${treeId}/persons/import`)
+        .post(`${apiBase}/${treeId}/persons/import`)
         .send({ csvContent })
         .expect(HttpStatus.CREATED);
 
@@ -113,7 +114,7 @@ new-person,Jane Doe,FEMALE,1975-06-20,,`;
 person-invalid,Test User,INVALID_GENDER,1960-01-01,,`;
 
       const response = await request(app.getHttpServer())
-        .post(`/trees/${treeId}/persons/import`)
+        .post(`${apiBase}/${treeId}/persons/import`)
         .send({ csvContent })
         .expect(HttpStatus.BAD_REQUEST);
 
@@ -125,7 +126,7 @@ person-invalid,Test User,INVALID_GENDER,1960-01-01,,`;
 person-bad-date,Test User,MALE,01/15/1960,,`;
 
       const response = await request(app.getHttpServer())
-        .post(`/trees/${treeId}/persons/import`)
+        .post(`${apiBase}/${treeId}/persons/import`)
         .send({ csvContent })
         .expect(HttpStatus.BAD_REQUEST);
 
@@ -137,7 +138,7 @@ person-bad-date,Test User,MALE,01/15/1960,,`;
 ,Alice Smith,FEMALE,1960-05-15,,`;
 
       const response = await request(app.getHttpServer())
-        .post(`/trees/${treeId}/persons/import`)
+        .post(`${apiBase}/${treeId}/persons/import`)
         .send({ csvContent })
         .expect(HttpStatus.BAD_REQUEST);
 
@@ -149,7 +150,7 @@ person-bad-date,Test User,MALE,01/15/1960,,`;
 person@invalid,Alice Smith,FEMALE,1960-05-15,,`;
 
       const response = await request(app.getHttpServer())
-        .post(`/trees/${treeId}/persons/import`)
+        .post(`${apiBase}/${treeId}/persons/import`)
         .send({ csvContent })
         .expect(HttpStatus.BAD_REQUEST);
 
@@ -158,7 +159,7 @@ person@invalid,Alice Smith,FEMALE,1960-05-15,,`;
 
     test('Should reject CSV with empty content', async () => {
       const response = await request(app.getHttpServer())
-        .post(`/trees/${treeId}/persons/import`)
+        .post(`${apiBase}/${treeId}/persons/import`)
         .send({ csvContent: '' })
         .expect(HttpStatus.BAD_REQUEST);
 
@@ -169,7 +170,7 @@ person@invalid,Alice Smith,FEMALE,1960-05-15,,`;
       const csvContent = `personId,name,gender,birthDate,birthPlace,deathDate`;
 
       const response = await request(app.getHttpServer())
-        .post(`/trees/${treeId}/persons/import`)
+        .post(`${apiBase}/${treeId}/persons/import`)
         .send({ csvContent })
         .expect(HttpStatus.BAD_REQUEST);
 
@@ -181,7 +182,7 @@ person@invalid,Alice Smith,FEMALE,1960-05-15,,`;
 person-1,Alice Smith,FEMALE,1960-05-15,,`;
 
       const response = await request(app.getHttpServer())
-        .post('/trees/non-existent-tree/persons/import')
+        .post(`${apiBase}/non-existent-tree/persons/import`)
         .send({ csvContent })
         .expect(HttpStatus.NOT_FOUND);
 
@@ -194,7 +195,7 @@ min-person-1,Minimal Person 1
 min-person-2,Minimal Person 2`;
 
       const response = await request(app.getHttpServer())
-        .post(`/trees/${treeId}/persons/import`)
+        .post(`${apiBase}/${treeId}/persons/import`)
         .send({ csvContent })
         .expect(HttpStatus.CREATED);
 
@@ -211,7 +212,7 @@ min-person-2,Minimal Person 2`;
    space-person   ,  Jane with Spaces  ,FEMALE,1980-01-01,  Boston  ,`;
 
       const response = await request(app.getHttpServer())
-        .post(`/trees/${treeId}/persons/import`)
+        .post(`${apiBase}/${treeId}/persons/import`)
         .send({ csvContent })
         .expect(HttpStatus.CREATED);
 
@@ -228,7 +229,7 @@ min-person-2,Minimal Person 2`;
 long-name,${longName},FEMALE,1960-01-01,,`;
 
       const response = await request(app.getHttpServer())
-        .post(`/trees/${treeId}/persons/import`)
+        .post(`${apiBase}/${treeId}/persons/import`)
         .send({ csvContent })
         .expect(HttpStatus.BAD_REQUEST);
 
@@ -241,7 +242,7 @@ long-name,${longName},FEMALE,1960-01-01,,`;
 first-import,First Import,MALE,1960-01-01,,`;
 
       let response = await request(app.getHttpServer())
-        .post(`/trees/${treeId}/persons/import`)
+        .post(`${apiBase}/${treeId}/persons/import`)
         .send({ csvContent })
         .expect(HttpStatus.CREATED);
 
@@ -253,7 +254,7 @@ first-import,First Import,MALE,1960-01-01,,
 second-import,Second Import,FEMALE,1970-01-01,,`;
 
       response = await request(app.getHttpServer())
-        .post(`/trees/${treeId}/persons/import`)
+        .post(`${apiBase}/${treeId}/persons/import`)
         .send({ csvContent })
         .expect(HttpStatus.CREATED);
 

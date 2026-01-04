@@ -9,6 +9,7 @@ describe('Tree Listing E2E', () => {
   let client: MongoClient;
   const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017';
   const dbName = process.env.MONGODB_DB_NAME || 'silsilah';
+  const apiBase = '/api/trees';
 
   beforeAll(async () => {
     process.env.ENABLE_AUTH_GUARD = 'false';
@@ -38,7 +39,7 @@ describe('Tree Listing E2E', () => {
   describe('GET /trees', () => {
     it('returns empty array when user has no trees', async () => {
       const res = await request(app.getHttpServer())
-        .get('/trees')
+        .get(apiBase)
         .expect(HttpStatus.OK);
 
       expect(res.body).toEqual({
@@ -68,7 +69,7 @@ describe('Tree Listing E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get('/trees')
+        .get(apiBase)
         .expect(HttpStatus.OK);
 
       expect(res.body.total).toBe(1);
@@ -103,7 +104,7 @@ describe('Tree Listing E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get('/trees')
+        .get(apiBase)
         .expect(HttpStatus.OK);
 
       expect(res.body.total).toBe(1);
@@ -134,7 +135,7 @@ describe('Tree Listing E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get('/trees')
+        .get(apiBase)
         .expect(HttpStatus.OK);
 
       expect(res.body.total).toBe(1);
@@ -192,7 +193,7 @@ describe('Tree Listing E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get('/trees')
+        .get(apiBase)
         .expect(HttpStatus.OK);
 
       expect(res.body.total).toBe(3);
@@ -227,7 +228,7 @@ describe('Tree Listing E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get('/trees')
+        .get(apiBase)
         .expect(HttpStatus.OK);
 
       expect(res.body).toEqual({
@@ -275,7 +276,7 @@ describe('Tree Listing E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get('/trees')
+        .get(apiBase)
         .expect(HttpStatus.OK);
 
       expect(res.body.total).toBe(2);

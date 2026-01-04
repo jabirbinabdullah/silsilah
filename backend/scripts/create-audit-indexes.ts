@@ -13,6 +13,8 @@
 
 import { MongoClient } from 'mongodb';
 
+type AuditIndexSpec = Record<string, 1 | -1>;
+
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017';
 const DB_NAME = 'genealogy-db';
 const COLLECTION_NAME = 'audit_logs';
@@ -35,7 +37,7 @@ async function createIndexes() {
     }
 
     // Create required indexes
-    const indexes = [
+    const indexes: { name: string; spec: AuditIndexSpec; options: { name: string } }[] = [
       {
         name: 'idx_treeId_timestamp',
         spec: { treeId: 1, timestamp: -1 },

@@ -10,6 +10,7 @@ describe('Tree Render E2E', () => {
   const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017';
   const dbName = process.env.MONGODB_DB_NAME || 'silsilah';
   const testTreeId = 'tree-render-test';
+  const apiBase = '/api/trees';
 
   beforeAll(async () => {
     process.env.ENABLE_AUTH_GUARD = 'false';
@@ -39,13 +40,13 @@ describe('Tree Render E2E', () => {
   describe('Authorization boundary', () => {
     it('returns 404 when tree does not exist', async () => {
       const res = await request(app.getHttpServer())
-        .get('/trees/nonexistent-tree/render-data')
+        .get(`${apiBase}/nonexistent-tree/render-data`)
         .expect(HttpStatus.NOT_FOUND);
     });
 
     it('returns 400 when treeId is empty', async () => {
       await request(app.getHttpServer())
-        .get('/trees/ /render-data')
+        .get(`${apiBase}/ /render-data`)
         .expect(HttpStatus.BAD_REQUEST); // Empty treeId validation
     });
   });
@@ -65,7 +66,7 @@ describe('Tree Render E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get(`/trees/${testTreeId}/render-data`)
+        .get(`${apiBase}/${testTreeId}/render-data`)
         .expect(HttpStatus.OK);
 
       expect(res.body).toEqual({
@@ -91,7 +92,7 @@ describe('Tree Render E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get(`/trees/${testTreeId}/render-data`)
+        .get(`${apiBase}/${testTreeId}/render-data`)
         .expect(HttpStatus.OK);
 
       expect(res.body.version).toBe('v1');
@@ -118,7 +119,7 @@ describe('Tree Render E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get(`/trees/${testTreeId}/render-data`)
+        .get(`${apiBase}/${testTreeId}/render-data`)
         .expect(HttpStatus.OK);
 
       expect(res.body.nodes).toHaveLength(2);
@@ -142,7 +143,7 @@ describe('Tree Render E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get(`/trees/${testTreeId}/render-data`)
+        .get(`${apiBase}/${testTreeId}/render-data`)
         .expect(HttpStatus.OK);
 
       expect(res.body.nodes).toHaveLength(1);
@@ -163,7 +164,7 @@ describe('Tree Render E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get(`/trees/${testTreeId}/render-data`)
+        .get(`${apiBase}/${testTreeId}/render-data`)
         .expect(HttpStatus.OK);
 
       expect(res.body.nodes).toHaveLength(1);
@@ -184,7 +185,7 @@ describe('Tree Render E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get(`/trees/${testTreeId}/render-data`)
+        .get(`${apiBase}/${testTreeId}/render-data`)
         .expect(HttpStatus.OK);
 
       expect(res.body.nodes).toHaveLength(1);
@@ -205,7 +206,7 @@ describe('Tree Render E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get(`/trees/${testTreeId}/render-data`)
+        .get(`${apiBase}/${testTreeId}/render-data`)
         .expect(HttpStatus.OK);
 
       expect(res.body.nodes).toHaveLength(1);
@@ -234,7 +235,7 @@ describe('Tree Render E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get(`/trees/${testTreeId}/render-data`)
+        .get(`${apiBase}/${testTreeId}/render-data`)
         .expect(HttpStatus.OK);
 
       expect(res.body.spouseEdges).toHaveLength(2);
@@ -262,7 +263,7 @@ describe('Tree Render E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get(`/trees/${testTreeId}/render-data`)
+        .get(`${apiBase}/${testTreeId}/render-data`)
         .expect(HttpStatus.OK);
 
       expect(res.body.parentChildEdges).toHaveLength(2);
@@ -292,7 +293,7 @@ describe('Tree Render E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get(`/trees/${testTreeId}/render-data`)
+        .get(`${apiBase}/${testTreeId}/render-data`)
         .expect(HttpStatus.OK);
 
       expect(res.body.nodes).toHaveLength(4);
@@ -317,7 +318,7 @@ describe('Tree Render E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get(`/trees/${testTreeId}/render-data`)
+        .get(`${apiBase}/${testTreeId}/render-data`)
         .expect(HttpStatus.OK);
 
       expect(res.body.nodes).toHaveLength(3);
@@ -345,7 +346,7 @@ describe('Tree Render E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get(`/trees/${testTreeId}/render-data`)
+        .get(`${apiBase}/${testTreeId}/render-data`)
         .expect(HttpStatus.OK);
 
       expect(res.body.parentChildEdges).toHaveLength(2);
@@ -365,7 +366,7 @@ describe('Tree Render E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get(`/trees/${testTreeId}/render-data`)
+        .get(`${apiBase}/${testTreeId}/render-data`)
         .expect(HttpStatus.OK);
 
       expect(res.body.parentChildEdges).toHaveLength(1);
@@ -390,8 +391,8 @@ describe('Tree Render E2E', () => {
         members: [],
       } as any);
 
-      const res1 = await request(app.getHttpServer()).get(`/trees/${testTreeId}/render-data`);
-      const res2 = await request(app.getHttpServer()).get(`/trees/${testTreeId}/render-data`);
+      const res1 = await request(app.getHttpServer()).get(`${apiBase}/${testTreeId}/render-data`);
+      const res2 = await request(app.getHttpServer()).get(`${apiBase}/${testTreeId}/render-data`);
 
       expect(res1.body).toEqual(res2.body);
     });
@@ -412,7 +413,7 @@ describe('Tree Render E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get(`/trees/${testTreeId}/render-data`)
+        .get(`${apiBase}/${testTreeId}/render-data`)
         .expect(HttpStatus.OK);
 
       expect(res.body.version).toBe('v1');
@@ -432,7 +433,7 @@ describe('Tree Render E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get(`/trees/${testTreeId}/render-data`)
+        .get(`${apiBase}/${testTreeId}/render-data`)
         .expect(HttpStatus.OK);
 
       expect(res.body.treeId).toBe(testTreeId);
@@ -452,7 +453,7 @@ describe('Tree Render E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get(`/trees/${testTreeId}/render-data`)
+        .get(`${apiBase}/${testTreeId}/render-data`)
         .expect(HttpStatus.OK);
 
       const node = res.body.nodes[0];
@@ -478,7 +479,7 @@ describe('Tree Render E2E', () => {
       } as any);
 
       const res = await request(app.getHttpServer())
-        .get(`/trees/${testTreeId}/render-data`)
+        .get(`${apiBase}/${testTreeId}/render-data`)
         .expect(HttpStatus.OK);
 
       const edge = res.body.spouseEdges[0];

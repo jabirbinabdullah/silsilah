@@ -54,6 +54,7 @@ import {
   TreeActivityResponseDto,
   PersonHistoryResponseDto,
 } from '../dtos/audit.dto';
+import { mapAuditEntries } from '../mappers/audit.mapper';
 import {
   NotFoundError,
   InvariantViolationError,
@@ -156,6 +157,12 @@ export class GenealogyController {
     }
     
     return userContext;
+  }
+
+  private parsePagination(limitStr?: string, offsetStr?: string): { limit: number; offset: number } {
+    const limit = limitStr ? Math.min(Math.max(parseInt(limitStr, 10) || 50, 1), 1000) : 50;
+    const offset = offsetStr ? Math.max(parseInt(offsetStr, 10) || 0, 0) : 0;
+    return { limit, offset };
   }
 
   /**
@@ -551,24 +558,12 @@ export class GenealogyController {
       AuthorizationPolicy.requireAuthenticated(userContext);
       assertRateLimit(`audit:tree:${treeId}:${req?.ip ?? 'unknown'}`, 120, 60_000); // 120 req/min per IP
       
-      // Parse pagination params
-      const limit = limitStr ? Math.min(Math.max(parseInt(limitStr, 10) || 50, 1), 1000) : 50;
-      const offset = offsetStr ? Math.max(parseInt(offsetStr, 10) || 0, 0) : 0;
+      const { limit, offset } = this.parsePagination(limitStr, offsetStr);
       const result = await this.getTreeActivityHandler.execute({ treeId, limit, offset });
 
       return {
         treeId,
-        entries: result.entries.map((entry) => ({
-          id: entry.id ?? `${entry.treeId}-${entry.timestamp.getTime()}`,
-          treeId: entry.treeId,
-          action: entry.action,
-          actor: {
-            userId: entry.userId,
-            username: entry.username,
-            role: entry.role,
-          },
-          timestamp: entry.timestamp.toISOString(),
-        })),
+        entries: mapAuditEntries(result.entries),
         total: result.total,
         pagination: {
           limit,
@@ -647,26 +642,14 @@ export class GenealogyController {
         throw new HttpException('Person not found', HttpStatus.NOT_FOUND);
       }
       
-      // Parse pagination params
-      const limit = limitStr ? Math.min(Math.max(parseInt(limitStr, 10) || 50, 1), 1000) : 50;
-      const offset = offsetStr ? Math.max(parseInt(offsetStr, 10) || 0, 0) : 0;
+      const { limit, offset } = this.parsePagination(limitStr, offsetStr);
 
       const result = await this.getPersonHistoryHandler.execute({ treeId, personId, limit, offset });
 
       return {
         treeId,
         personId,
-        entries: result.entries.map((entry) => ({
-          id: entry.id ?? `${entry.treeId}-${entry.timestamp.getTime()}`,
-          treeId: entry.treeId,
-          action: entry.action,
-          actor: {
-            userId: entry.userId,
-            username: entry.username,
-            role: entry.role,
-          },
-          timestamp: entry.timestamp.toISOString(),
-        })),
+        entries: mapAuditEntries(result.entries),
         total: result.total,
         pagination: {
           limit,

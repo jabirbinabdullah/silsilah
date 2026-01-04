@@ -27,6 +27,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
   let mongoClient: MongoClient;
   const treeId = 'tree-e2e-test';
   const testDbName = 'silsilah_e2e_test';
+  const apiBase = '/api/trees';
 
   beforeAll(async () => {
     // Set test environment
@@ -62,7 +63,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
   describe('POST /trees - Create family tree', () => {
     it('should create a new family tree', () => {
       return request(app.getHttpServer())
-        .post('/trees')
+        .post(apiBase)
         .send({ treeId })
         .expect(201)
         .expect((res) => {
@@ -75,7 +76,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
 
     it('should return 400 for missing treeId', () => {
       return request(app.getHttpServer())
-        .post('/trees')
+        .post(apiBase)
         .send({})
         .expect(400);
     });
@@ -85,7 +86,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
   describe('POST /trees/:treeId/persons - Add person', () => {
     it('should add person A', () => {
       return request(app.getHttpServer())
-        .post(`/trees/${treeId}/persons`)
+        .post(`${apiBase}/${treeId}/persons`)
         .send({
           personId: 'person-a',
           name: 'Alice',
@@ -103,7 +104,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
 
     it('should add person B', () => {
       return request(app.getHttpServer())
-        .post(`/trees/${treeId}/persons`)
+        .post(`${apiBase}/${treeId}/persons`)
         .send({
           personId: 'person-b',
           name: 'Bob',
@@ -119,7 +120,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
 
     it('should add person C', () => {
       return request(app.getHttpServer())
-        .post(`/trees/${treeId}/persons`)
+        .post(`${apiBase}/${treeId}/persons`)
         .send({
           personId: 'person-c',
           name: 'Charlie',
@@ -135,7 +136,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
 
     it('should return 404 for nonexistent tree', () => {
       return request(app.getHttpServer())
-        .post(`/trees/nonexistent/persons`)
+        .post(`${apiBase}/nonexistent/persons`)
         .send({
           personId: 'person-x',
           name: 'Unknown',
@@ -146,7 +147,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
 
     it('should reject deathDate before birthDate (invariant)', () => {
       return request(app.getHttpServer())
-        .post(`/trees/${treeId}/persons`)
+        .post(`${apiBase}/${treeId}/persons`)
         .send({
           personId: 'person-invalid',
           name: 'Invalid',
@@ -162,7 +163,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
   describe('GET /trees/:treeId/persons/:personId - Retrieve person', () => {
     it('should retrieve person A', () => {
       return request(app.getHttpServer())
-        .get(`/trees/${treeId}/persons/person-a`)
+        .get(`${apiBase}/${treeId}/persons/person-a`)
         .expect(200)
         .expect((res) => {
           expect(res.body).toMatchObject({
@@ -176,7 +177,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
 
     it('should return 404 for nonexistent person', () => {
       return request(app.getHttpServer())
-        .get(`/trees/${treeId}/persons/nonexistent`)
+        .get(`${apiBase}/${treeId}/persons/nonexistent`)
         .expect(404);
     });
   });
@@ -185,7 +186,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
   describe('POST /trees/:treeId/relationships/spouse - Establish spouse', () => {
     it('should establish spouse relationship between A and B', () => {
       return request(app.getHttpServer())
-        .post(`/trees/${treeId}/relationships/spouse`)
+        .post(`${apiBase}/${treeId}/relationships/spouse`)
         .send({
           spouseA: 'person-a',
           spouseB: 'person-b',
@@ -203,7 +204,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
   describe('POST /trees/:treeId/relationships/parent-child', () => {
     it('should establish parent-child relationship A → C', () => {
       return request(app.getHttpServer())
-        .post(`/trees/${treeId}/relationships/parent-child`)
+        .post(`${apiBase}/${treeId}/relationships/parent-child`)
         .send({
           parentId: 'person-a',
           childId: 'person-c',
@@ -218,7 +219,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
 
     it('should reject creating cycle', () => {
       return request(app.getHttpServer())
-        .post(`/trees/${treeId}/relationships/parent-child`)
+        .post(`${apiBase}/${treeId}/relationships/parent-child`)
         .send({
           parentId: 'person-c',
           childId: 'person-a',
@@ -231,7 +232,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
   describe('GET /trees/:treeId/persons/:personId/ancestors', () => {
     it('should return ancestors of C (should be A)', () => {
       return request(app.getHttpServer())
-        .get(`/trees/${treeId}/persons/person-c/ancestors`)
+        .get(`${apiBase}/${treeId}/persons/person-c/ancestors`)
         .expect(200)
         .expect((res) => {
           expect(res.body).toEqual({
@@ -243,7 +244,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
 
     it('should return empty ancestors for A (no parents)', () => {
       return request(app.getHttpServer())
-        .get(`/trees/${treeId}/persons/person-a/ancestors`)
+        .get(`${apiBase}/${treeId}/persons/person-a/ancestors`)
         .expect(200)
         .expect((res) => {
           expect(res.body).toEqual({
@@ -258,7 +259,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
   describe('GET /trees/:treeId/persons/:personId/descendants', () => {
     it('should return descendants of A (should be C)', () => {
       return request(app.getHttpServer())
-        .get(`/trees/${treeId}/persons/person-a/descendants`)
+        .get(`${apiBase}/${treeId}/persons/person-a/descendants`)
         .expect(200)
         .expect((res) => {
           expect(res.body).toEqual({
@@ -270,7 +271,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
 
     it('should return empty descendants for C (no children)', () => {
       return request(app.getHttpServer())
-        .get(`/trees/${treeId}/persons/person-c/descendants`)
+        .get(`${apiBase}/${treeId}/persons/person-c/descendants`)
         .expect(200)
         .expect((res) => {
           expect(res.body).toEqual({
@@ -285,7 +286,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
   describe('DELETE /trees/:treeId/relationships', () => {
     it('should remove parent-child relationship between A and C', () => {
       return request(app.getHttpServer())
-        .delete(`/trees/${treeId}/relationships`)
+        .delete(`${apiBase}/${treeId}/relationships`)
         .send({
           personId1: 'person-a',
           personId2: 'person-c',
@@ -300,7 +301,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
 
     it('should verify A and C no longer have relationship', () => {
       return request(app.getHttpServer())
-        .get(`/trees/${treeId}/persons/person-c/ancestors`)
+        .get(`${apiBase}/${treeId}/persons/person-c/ancestors`)
         .expect(200)
         .expect((res) => {
           expect(res.body.ancestors).not.toContain('person-a');
@@ -312,7 +313,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
   describe('DELETE /trees/:treeId/persons/:personId - Remove person', () => {
     it('should reject deleting person B (has spouse relationship)', () => {
       return request(app.getHttpServer())
-        .delete(`/trees/${treeId}/persons/person-b`)
+        .delete(`${apiBase}/${treeId}/persons/person-b`)
         .expect(409)
         .expect((res) => {
           expect(res.body.message).toContain('relationships');
@@ -324,7 +325,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
   describe('DELETE /trees/:treeId/persons/:personId - Delete orphan person', () => {
     it('should successfully delete person C (no relationships after removal)', () => {
       return request(app.getHttpServer())
-        .delete(`/trees/${treeId}/persons/person-c`)
+        .delete(`${apiBase}/${treeId}/persons/person-c`)
         .expect(200)
         .expect((res) => {
           expect(res.body).toEqual({
@@ -335,7 +336,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
 
     it('should return 404 when querying deleted person', () => {
       return request(app.getHttpServer())
-        .get(`/trees/${treeId}/persons/person-c`)
+        .get(`${apiBase}/${treeId}/persons/person-c`)
         .expect(404);
     });
   });
@@ -344,7 +345,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
   describe('GET /trees/:treeId/render', () => {
     it('should render tree from person A', () => {
       return request(app.getHttpServer())
-        .get(`/trees/${treeId}/render`)
+        .get(`${apiBase}/${treeId}/render`)
         .query({ rootPersonId: 'person-a', viewMode: 'VERTICAL' })
         .expect(200)
         .expect((res) => {
@@ -362,14 +363,14 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
 
     it('should return 400 when rootPersonId is missing', () => {
       return request(app.getHttpServer())
-        .get(`/trees/${treeId}/render`)
+        .get(`${apiBase}/${treeId}/render`)
         .query({ viewMode: 'VERTICAL' })
         .expect(400);
     });
 
     it('should default to VERTICAL viewMode', () => {
       return request(app.getHttpServer())
-        .get(`/trees/${treeId}/render`)
+        .get(`${apiBase}/${treeId}/render`)
         .query({ rootPersonId: 'person-a' })
         .expect(200)
         .expect((res) => {
@@ -382,7 +383,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
   describe('Final state verification', () => {
     it('should include root person in nodes (A)', async () => {
       return request(app.getHttpServer())
-        .get(`/trees/${treeId}/render`)
+        .get(`${apiBase}/${treeId}/render`)
         .query({ rootPersonId: 'person-a' })
         .expect(200)
         .expect((res) => {
@@ -393,7 +394,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
 
     it('should have 1 spouse edge (A ↔ B)', async () => {
       return request(app.getHttpServer())
-        .get(`/trees/${treeId}/render`)
+        .get(`${apiBase}/${treeId}/render`)
         .query({ rootPersonId: 'person-a' })
         .expect(200)
         .expect((res) => {
@@ -406,7 +407,7 @@ describe('Genealogy E2E (HTTP + MongoDB)', () => {
 
     it('should have 0 parent-child edges', async () => {
       return request(app.getHttpServer())
-        .get(`/trees/${treeId}/render`)
+        .get(`${apiBase}/${treeId}/render`)
         .query({ rootPersonId: 'person-a' })
         .expect(200)
         .expect((res) => {

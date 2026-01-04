@@ -45,6 +45,7 @@ export type TreeRenderV1 = {
 };
 
 import { httpJson } from './utils/httpClient';
+import { resolvePagination } from './utils/pagination';
 
 const getBaseUrl = (): string => {
   const fromEnv = (import.meta as any).env?.VITE_API_BASE_URL as string | undefined;
@@ -468,10 +469,10 @@ export async function getTreeActivity(
 ): Promise<PaginatedAuditResponse> {
   const base = getBaseUrl();
   const token = getAuthToken();
-  const offset = (page - 1) * limit;
+  const { offset, limit: safeLimit } = resolvePagination(page, limit);
 
   const queryParams = new URLSearchParams({
-    limit: String(limit),
+    limit: String(safeLimit),
     offset: String(offset),
   });
 
@@ -505,10 +506,10 @@ export async function getPersonHistory(
 ): Promise<PaginatedAuditResponse> {
   const base = getBaseUrl();
   const token = getAuthToken();
-  const offset = (page - 1) * limit;
+  const { offset, limit: safeLimit } = resolvePagination(page, limit);
 
   const queryParams = new URLSearchParams({
-    limit: String(limit),
+    limit: String(safeLimit),
     offset: String(offset),
   });
 

@@ -9,6 +9,7 @@ describe('Export E2E (owner-only)', () => {
   let mongoClient: MongoClient;
   const treeId = 'export-tree';
   const dbName = 'silsilah_export_test';
+  const apiBase = '/api/trees';
 
   beforeAll(async () => {
     process.env.MONGODB_DB_NAME = dbName;
@@ -28,32 +29,32 @@ describe('Export E2E (owner-only)', () => {
 
     // Seed minimal tree
     await request(app.getHttpServer())
-      .post('/trees')
+      .post(apiBase)
       .send({ treeId })
       .expect(201);
 
     await request(app.getHttpServer())
-      .post(`/trees/${treeId}/persons`)
+      .post(`${apiBase}/${treeId}/persons`)
       .send({ personId: 'a', name: 'Alice', gender: 'FEMALE' })
       .expect(201);
 
     await request(app.getHttpServer())
-      .post(`/trees/${treeId}/persons`)
+      .post(`${apiBase}/${treeId}/persons`)
       .send({ personId: 'b', name: 'Bob', gender: 'MALE' })
       .expect(201);
 
     await request(app.getHttpServer())
-      .post(`/trees/${treeId}/persons`)
+      .post(`${apiBase}/${treeId}/persons`)
       .send({ personId: 'c', name: 'Charlie', gender: 'MALE' })
       .expect(201);
 
     await request(app.getHttpServer())
-      .post(`/trees/${treeId}/relationships/spouse`)
+      .post(`${apiBase}/${treeId}/relationships/spouse`)
       .send({ spouseA: 'a', spouseB: 'b' })
       .expect(201);
 
     await request(app.getHttpServer())
-      .post(`/trees/${treeId}/relationships/parent-child`)
+      .post(`${apiBase}/${treeId}/relationships/parent-child`)
       .send({ parentId: 'a', childId: 'c' })
       .expect(201);
   });
@@ -67,7 +68,7 @@ describe('Export E2E (owner-only)', () => {
 
   it('GET /trees/:id/export/json returns snapshot', async () => {
     const res = await request(app.getHttpServer())
-      .get(`/trees/${treeId}/export/json`)
+      .get(`${apiBase}/${treeId}/export/json`)
       .expect(200);
 
     expect(res.body.treeId).toBe(treeId);
@@ -78,7 +79,7 @@ describe('Export E2E (owner-only)', () => {
 
   it('GET /trees/:id/export/gedcom returns GEDCOM text', async () => {
     const res = await request(app.getHttpServer())
-      .get(`/trees/${treeId}/export/gedcom`)
+      .get(`${apiBase}/${treeId}/export/gedcom`)
       .expect(200);
 
     expect(typeof res.text).toBe('string');

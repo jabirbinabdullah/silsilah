@@ -30,6 +30,7 @@ export interface CommandResult<T = any> {
  */
 export interface AddPersonCommand {
   treeId: string;
+  personId?: string;
   name: string;
   gender: 'MALE' | 'FEMALE' | 'UNKNOWN';
   birthDate?: string | null;
@@ -104,7 +105,7 @@ export class GenealogyCommandBus {
   static async addPerson(cmd: AddPersonCommand): Promise<CommandResult<{ personId: string }>> {
     try {
       const result = await api.createPerson(cmd.treeId, {
-        personId: '', // Backend generates
+        personId: cmd.personId ?? '', // Allow explicit personId; fallback to backend-generated
         name: cmd.name,
         gender: cmd.gender,
         birthDate: cmd.birthDate ?? null,

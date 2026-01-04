@@ -246,6 +246,7 @@ export const RelationshipManager: React.FC<RelationshipManagerProps> = ({
                       try {
                         const result = await GenealogyCommandBus.addPerson({
                           treeId,
+                          personId: payload.personId,
                           name: payload.name,
                           gender: payload.gender,
                           birthDate: payload.birthDate,
