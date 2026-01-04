@@ -1,4 +1,4 @@
-import type { GenealogyGraph } from '../../domain/types';
+import type { GenealogyGraph, Member, UserRole } from '../../domain/types';
 import { GenealogyGraph as GenealogyGraphImpl } from '../../domain/genealogy-graph';
 import type { Collection, MongoClient } from 'mongodb';
 
@@ -15,6 +15,8 @@ interface FamilyTreeDocument {
   }>;
   parentChildEdges: Array<{ parentId: string; childId: string }>;
   spouseEdges: Array<{ spouse1Id: string; spouse2Id: string }>;
+  ownerId: string;
+  members: Array<{ userId: string; role: UserRole }>;
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -23,6 +25,7 @@ interface FamilyTreeDocument {
 export interface GenealogyGraphRepository {
   findById(treeId: string): Promise<GenealogyGraph | null>;
   save(aggregate: GenealogyGraph): Promise<void>;
+  getSnapshot(treeId: string): Promise<FamilyTreeDocument | null>;
 }
 
 export class MongoGenealogyGraphRepository implements GenealogyGraphRepository {
@@ -86,6 +89,8 @@ export class MongoGenealogyGraphRepository implements GenealogyGraphRepository {
       persons: personsSnapshot,
       parentChildEdges,
       spouseEdges,
+      ownerId: existing?.ownerId || '',
+      members: existing?.members || [],
       version: existing ? existing.version + 1 : 1,
       createdAt: existing ? existing.createdAt : now,
       updatedAt: now,
@@ -107,5 +112,98 @@ export class MongoGenealogyGraphRepository implements GenealogyGraphRepository {
       // Insert new document
       await this.collection.insertOne(doc);
     }
+  }
+
+  /**
+   * Get ownership metadata for a tree.
+   */
+  async getOwnership(treeId: string): Promise<{ ownerId: string; members: Member[] } | null> {
+    const doc = await this.collection.findOne({ _id: treeId });
+    if (!doc) {
+      return null;
+    }
+    return {
+      ownerId: doc.ownerId,
+      members: doc.members,
+    };
+  }
+
+  /**
+   * Update ownership metadata (ownerId and members).
+   * This preserves the aggregate data and only updates ownership fields.
+   */
+  async updateOwnership(
+    treeId: string,
+    ownerId: string,
+    members: Member[],
+  ): Promise<void> {
+    const existing = await this.collection.findOne({ _id: treeId });
+
+    if (!existing) {
+      throw new Error(`Tree ${treeId} not found`);
+    }
+
+    const updated: FamilyTreeDocument = {
+      ...existing,
+      ownerId,
+      members,
+      version: existing.version + 1,
+      updatedAt: new Date(),
+    };
+
+    const result = await this.collection.replaceOne(
+      { _id: treeId, version: existing.version },
+      updated,
+    );
+
+    if (result.matchedCount === 0) {
+      throw new Error(
+        `Optimistic locking failure: tree ${treeId} was modified by another process`,
+      );
+    }
+  }
+
+  async getSnapshot(treeId: string): Promise<FamilyTreeDocument | null> {
+    const doc = await this.collection.findOne({ _id: treeId });
+    if (!doc) {
+      return null;
+    }
+    return doc;
+  }
+
+  async listTreesForUser(userId: string): Promise<Array<{
+    treeId: string;
+    ownerId: string;
+    members: Array<{ userId: string; role: 'OWNER' | 'EDITOR' | 'VIEWER' }>;
+    personCount: number;
+    createdAt: Date;
+    updatedAt: Date;
+  }>> {
+    // Find trees where user is owner OR member
+    const docs = await this.collection
+      .find({
+        $or: [
+          { ownerId: userId },
+          { 'members.userId': userId },
+        ],
+      })
+      .project({
+        treeId: 1,
+        ownerId: 1,
+        members: 1,
+        persons: 1, // Need to count
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      .toArray();
+
+    return docs.map(doc => ({
+      treeId: doc.treeId,
+      ownerId: doc.ownerId,
+      members: doc.members || [],
+      personCount: doc.persons?.length || 0,
+      createdAt: doc.createdAt,
+      updatedAt: doc.updatedAt,
+    }));
   }
 }

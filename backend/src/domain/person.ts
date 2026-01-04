@@ -39,8 +39,8 @@ export class Person {
     if (!['MALE', 'FEMALE', 'UNKNOWN'].includes(props.gender)) {
       throw new InvariantViolationError('gender is invalid');
     }
-    if (props.birthDate && props.deathDate && props.deathDate <= props.birthDate) {
-      throw new InvariantViolationError('deathDate must be after birthDate');
+    if (props.birthDate && props.deathDate && props.deathDate < props.birthDate) {
+      throw new InvariantViolationError('deathDate must be after or equal to birthDate');
     }
   }
 

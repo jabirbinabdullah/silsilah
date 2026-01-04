@@ -1,8 +1,23 @@
+import { Routes, Route } from 'react-router-dom';
+import { Layout } from './components/Layout';
+import { TreeList } from './components/TreeList';
+import { TreeViewer } from './components/TreeViewer';
+import TreeSettingsPage from './components/TreeSettingsPage';
+import { ToastProvider } from './components/ToastNotification';
+import { CollaborationProvider } from './context/CollaborationContext';
+
 export function App() {
   return (
-    <div style={{ padding: '1rem', fontFamily: 'sans-serif' }}>
-      <h1>Silsilah Frontend Scaffold</h1>
-      <p>This is a placeholder. Visualization and UI components will be added later.</p>
-    </div>
+    <CollaborationProvider>
+      <ToastProvider>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<TreeList />} />
+            <Route path="/trees/:treeId" element={<TreeViewer />} />
+            <Route path="/trees/:treeId/settings" element={<TreeSettingsPage />} />
+          </Routes>
+        </Layout>
+      </ToastProvider>
+    </CollaborationProvider>
   );
 }
